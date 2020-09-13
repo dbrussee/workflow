@@ -1,0 +1,35 @@
+* {
+    border: 0;
+    padding: 0;
+    margin: 0;
+    -webkit-box-sizing: border-box;
+            box-sizing: border-box;
+  }
+  
+  
+  
+  body {
+    height: 100%;
+    width: 100%;
+    position: absolute;
+    padding: .2em;
+  }
+  
+  
+  
+  fieldset {
+    border: 1px solid #2d77c2;
+    border-radius: .5em;
+    padding: .3em;
+    padding-top: 0;
+  }
+  
+  
+  
+  fieldset legend {
+    margin-left: .9em;
+    color: #2d77c2;
+    /*text-shadow: 1px 1px 1px black;*/
+    padding-left: .3em;
+    padding-right: .3em;
+  }
