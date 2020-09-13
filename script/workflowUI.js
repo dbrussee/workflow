@@ -32,19 +32,18 @@ WorkflowUI.drawPlayground = function(workflow, div, callback) {
     can.style.border = "1px dotted navy";
     div.appendChild(can);
     var y = 10;
-    var columns = [{"x":10, "y":y}, {"x":10 + WorkflowUI.stepImageWidth * 2 + WorkflowUI.stepImageColumnGutter, "y":y}]
+    var columns = [[],[],[]]
     for (var stepnum = 0; stepnum < workflow.flow.stepsList.length; stepnum++) {
         var step = workflow.flow.steps[workflow.flow.stepsList[stepnum]];
         var col = 0;
         if (step.dependsOn.length > 0) col = 1;
-        var yOffset = WorkflowUI.drawStep(can, step, columns[col].x, columns[col].y);
-        step.coords = {"x":columns[col].x, "y":columns[col].y, "x2":columns[col].x + WorkflowUI.stepImageWidth, "y2":columns[col].y + yOffset};
-        yOffset += 5; // Gap
-        columns[col].y += yOffset;
+        step.location = {"col":col, "row":columns[col].length}
+        columns[col].push(step.id);
     }
     for (var stepnum = 0; stepnum < workflow.flow.stepsList.length; stepnum++) {
         var step = workflow.flow.steps[workflow.flow.stepsList[stepnum]];
         WorkflowUI.drawConnectors(can, step);
+        WorkflowUI.drawStep(can, step);
     }
 }
 
@@ -132,34 +131,39 @@ WorkflowUI.redraw = function() {
     WorkflowUI.drawLocation.appendChild(tbl);
 }
 
-WorkflowUI.drawStep = function(can, step, x, y) {
-    var workflow = WorkflowUI.masterFlow;
-    var fullWidth = WorkflowUI.stepImageWidth;
-    var stepSize = fullWidth/3;
+WorkflowUI.drawStep = function(can, step) {
+    var wf = WorkflowUI.masterFlow;
+    var w = WorkflowUI.stepImageWidth;
+    var gut = WorkflowUI.stepImageColumnGutter;
+    var stepSize = w/3;
     var ctx = can.getContext("2d");
-    step.drawPath = ctx.beginPath();
-    ctx.moveTo(x, y+fullWidth); // Start at lower left
-    ctx.lineTo(x+fullWidth, y+fullWidth); // Bottom
-    ctx.lineTo(x+fullWidth, y); // Right edge
+    var xy = WorkflowUI.getXY(step);
+    var x = xy.x;
+    var y = xy.y;
+    ctx.beginPath();
+    ctx.moveTo(x, y+w); // Start at lower left
+    ctx.lineTo(x+w, y+w); // Bottom
+    ctx.lineTo(x+w, y); // Right edge
     ctx.lineTo(x+stepSize+stepSize, y); // Top step
     ctx.lineTo(x+stepSize+stepSize, y+stepSize); // Left on top step
     ctx.lineTo(x+stepSize, y+stepSize); // Top of 2nd step
     ctx.lineTo(x+stepSize, y+stepSize+stepSize); // Left of 2nd step
     ctx.lineTo(x, y+stepSize+stepSize); // Top of 1st step
-    //ctx.lineTo(x, y+fullWidth); // Left of 1st step
     ctx.closePath();
     ctx.lineWidth = 2;
+    ctx.strokeStyle = "#000000"; // black border
     ctx.stroke();
+    ctx.restore();
     var blockColor = null;
     if (step.completed) {
         ctx.fillStyle = "#90EE90";
-        var msg = workflow.canComplete(step, false);
+        var msg = wf.canComplete(step, false);
         if (msg != "") {
             blockColor = "#000000";
         }
     } else {
         for (var i = 0; i < step.dependsOn.length; i++) {
-            var step2 = workflow.getStep(step.dependsOn[i]);
+            var step2 = wf.getStep(step.dependsOn[i]);
             if (!step2.completed) {
                 blockColor = "#F08080";
                 break;
@@ -175,28 +179,33 @@ WorkflowUI.drawStep = function(can, step, x, y) {
     ctx.fill();
     ctx.font = "8pt Arial";
     ctx.fillStyle = "#000000"; // Back to black
-    ctx.fillText(step.title, x, y+fullWidth+12);
+    ctx.fillText(step.title, x, y+w+12);
     ctx.restore();
     if (blockColor != null) {
         ctx.beginPath();
-        ctx.arc(x + fullWidth - (fullWidth/3), y + fullWidth - (fullWidth/3), fullWidth/6, 0, 2 * Math.PI);
+        ctx.arc(x + w - (w/3), y + w - (w/3), w/6, 0, 2 * Math.PI);
         ctx.fillStyle = blockColor;
         ctx.fill();        
         ctx.restore();
     }
-
-    return fullWidth + 12; // Height of step diagram
 }
 WorkflowUI.drawConnectors = function(can, step) {
     var wf = WorkflowUI.masterFlow;
-    var fullWidth = WorkflowUI.stepImageWidth;
+    var w = WorkflowUI.stepImageWidth;
+    var gut = WorkflowUI.stepImageColumnGutter;
     var ctx = can.getContext("2d");
     for (var i = 0; i < step.dependsOn.length; i++) {
         var step2 = wf.getStep(step.dependsOn[i]);
         // Connect right edge of step2 to left edge of step
+        var xy = WorkflowUI.getXY(step);
+        var x1 = xy.x;
+        var y1 = xy.y;
+        xy = WorkflowUI.getXY(step2);
+        var x2 = xy.x;
+        var y2 = xy.y;
         ctx.beginPath();
-        ctx.moveTo(step.coords.x - 5, step.coords.y + (WorkflowUI.stepImageWidth/2));
-        ctx.lineTo(step2.coords.x + WorkflowUI.stepImageWidth + 5, step2.coords.y + (WorkflowUI.stepImageWidth/2));
+        ctx.moveTo(x1 - 5, y1 + (w/2));
+        ctx.lineTo(x2 + w + 5, y2 + (w/2));
         if (step2.completed) {
             ctx.strokeStyle = "#228B22";
         } else {
@@ -206,4 +215,33 @@ WorkflowUI.drawConnectors = function(can, step) {
         ctx.stroke();
         ctx.restore();
     }
+}
+WorkflowUI.getXY = function(step) {
+    var w = WorkflowUI.stepImageWidth;
+    var gut = WorkflowUI.stepImageColumnGutter;
+    var x = 10; // Canvas left padding;
+    if (step.location.col > 0) {
+        x += w * (step.location.col); // add double width
+        x += gut * (step.location.col); // add gutter
+    }
+    var y = 10; // Canvas top padding + first row height
+    y += (step.location.row * (w + 25)); // height of step + room for text
+    return {x:x, y:y}
+}
+WorkflowUI.stepUnderXY = function(wf, x, y) {
+    var w = WorkflowUI.stepImageWidth;
+    for (var stepnum = 0; stepnum < wf.flow.stepsList.length; stepnum++) {
+        var step = wf.flow.steps[page.wflow.flow.stepsList[stepnum]];
+        var xy = WorkflowUI.getXY(step);
+        if (x >= xy.x) {
+            if (x <= xy.x + w) {
+                if (y >= xy.y) {
+                    if (y <= xy.y + w) {
+                        return step;
+                    }
+                }
+            }
+        }
+    }
+    return null;
 }

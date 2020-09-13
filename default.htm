@@ -60,23 +60,12 @@
         WorkflowUI.drawPlayground(page.wflow, document.getElementById("locFlowDiagramPlayground"), function(event) {
             var can = WorkflowUI.drawPlaygroundCanvas;
             var x = event.clientX - can.offsetLeft;
-            var y = event.clientY - can.offsetTop;         
-            for (var stepnum = 0; stepnum < page.wflow.flow.stepsList.length; stepnum++) {
-                var step = page.wflow.flow.steps[page.wflow.flow.stepsList[stepnum]];
-                if (step.coords != null) {
-                    if (x >= step.coords.x) {
-                        if (x <= step.coords.x2) {
-                            if (y >= step.coords.y) {
-                                if (y <= step.coords.y2) {
-                                    page.pickedStepID = step.id;
-                                    page.editStep(step);
-                                    break;
-                                }
-                            }
-                        }
-                    }
-                }
-            }
+            var y = event.clientY - can.offsetTop;  
+            var step = WorkflowUI.stepUnderXY(page.wflow, x, y);
+            if (step != null) {
+                page.pickedStepID = step.id;
+                page.editStep(step);
+            }       
         });
 
         WorkflowUI.draw(page.wflow, document.getElementById("locFlowDiagram"), function(event) {
