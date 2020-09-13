@@ -31,15 +31,25 @@ WorkflowUI.drawPlayground = function(workflow, div, callback) {
     can.height = 350;
     can.style.border = "1px dotted navy";
     div.appendChild(can);
-    var y = 10;
+    /*
     var columns = [[],[],[]]
     for (var stepnum = 0; stepnum < workflow.flow.stepsList.length; stepnum++) {
         var step = workflow.flow.steps[workflow.flow.stepsList[stepnum]];
         var col = 0;
-        if (step.dependsOn.length > 0) col = 1;
+        if (step.dependsOn.length > 0) {
+            for (var depnum = 0; depnum < step.dependsOn.length; depnum++){
+                var dstep = workflow.getStep(step.dependsOn[depnum]);
+                var dcol = dstep.location.col + 1; // add 1 for testing
+                if (dcol > col) col = dcol;
+            }
+            while (columns.length < col) {
+                columns.push([]);
+            }
+        };
         step.location = {"col":col, "row":columns[col].length}
         columns[col].push(step.id);
     }
+    */
     for (var stepnum = 0; stepnum < workflow.flow.stepsList.length; stepnum++) {
         var step = workflow.flow.steps[workflow.flow.stepsList[stepnum]];
         WorkflowUI.drawConnectors(can, step);
