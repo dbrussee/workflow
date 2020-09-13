@@ -1,0 +1,34 @@
+.workflow_table {
+    border: 1px dotted navy !important;
+    border-collapse: collapse;
+    box-sizing: border-box;
+    font-family: Verdana, Geneva, Tahoma, sans-serif;
+}
+.workflow_table_header th {
+    background-color: cornflowerblue;
+    border: 1px solid white;
+    color: white;
+    padding-left: .2em;
+    padding-right: .2em;
+}
+.workflow_table th:first-child {
+    border-left: none;
+}
+.workflow_table th:last-child {
+    border-right: none;
+}
+.workflow_table_datarow {
+    cursor: pointer;
+}
+.workflow_table_datarow td {
+    padding-left: .2em;
+    padding-right: .2em;
+    border: 1px dotted navy;
+}
+.workflow_table_datarow.blocked td,
+.workflow_table_datarow td.blocked {
+    color: brown;
+}
+.workflow_table_datarow.done td {
+    background-color: palegreen;
+}
