@@ -150,22 +150,22 @@ WorkflowUI.drawStep = function(can, step, x, y) {
     ctx.closePath();
     ctx.lineWidth = 2;
     ctx.stroke();
-    var blocked = false;
+    var blockColor = null;
     if (step.completed) {
         ctx.fillStyle = "#90EE90";
         var msg = workflow.canComplete(step, false);
         if (msg != "") {
-            blocked = true
+            blockColor = "#000000";
         }
     } else {
         for (var i = 0; i < step.dependsOn.length; i++) {
             var step2 = workflow.getStep(step.dependsOn[i]);
             if (!step2.completed) {
-                blocked = true;
+                blockColor = "#F08080";
                 break;
             }
         }
-        if (blocked) {
+        if (blockColor != null) {
             ctx.fillStyle = "#A9A9A9";
         } else {
             ctx.fillStyle = "#F8F8FF";
@@ -177,10 +177,10 @@ WorkflowUI.drawStep = function(can, step, x, y) {
     ctx.fillStyle = "#000000"; // Back to black
     ctx.fillText(step.title, x, y+fullWidth+12);
     ctx.restore();
-    if (blocked) {
+    if (blockColor != null) {
         ctx.beginPath();
         ctx.arc(x + fullWidth - (fullWidth/3), y + fullWidth - (fullWidth/3), fullWidth/6, 0, 2 * Math.PI);
-        ctx.fillStyle = "#FF0000";
+        ctx.fillStyle = blockColor;
         ctx.fill();        
         ctx.restore();
     }
