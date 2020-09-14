@@ -31,19 +31,32 @@
                 step.result = data.step_resolution;
             }
         }
-        WorkflowUI.redraw();
+        //WorkflowUI.redraw();
         WorkflowUI.drawPlayground(page.wflow);
-        popDialog();
     }
     page.init = function() {
+        window.onkeydown = function(event) {
+            //console.log(event.keyCode);
+            //if (event.ctrlKey) {
+                if (event.keyCode == 37) {
+                    page.move("H", -1);
+                } else if (event.keyCode == 39) {
+                    page.move("H", 1);
+                } else if (event.keyCode == 38) {
+                    page.move("V", -1);
+                } else if (event.keyCode == 40) {
+                    page.move("V", 1);
+                }
+            //}
+        }
         page.wflow = new Workflow("Test");
         page.wflow.flow = {
             "name":"Test",
             "steps":{
-                "0":{id:0,title:"Zero",desc:"My first step",location:{col:0,row:0},result:null,completed:false,dependsOn:[],dependedOnBy:[1,2],comment:"",resolve_list:[]},
+                "0":{id:0,title:"Zero",desc:"My first step",location:{col:0,row:0},result:null,completed:false,dependsOn:[],dependedOnBy:[1,2],comment:"Sample comment",resolve_list:[]},
                 "4":{id:4,title:"Four",desc:"First PLUS",location:{col:0,row:1},result:null,completed:false,dependsOn:[],dependedOnBy:[1],comment:"", resolve_list:[]},
-                "1":{id:1,title:"One",desc:"Second step",location:{col:1,row:0},result:null,completed:false,dependsOn:[0,4],dependedOnBy:[5],comment:"", resolve_list:[]},
-                "2":{id:2,title:"Two",desc:"Third step",location:{col:1,row:1},result:null,completed:false,dependsOn:[0,3],dependedOnBy:[],comment:"", resolve_list:[]},
+                "1":{id:1,title:"One",desc:"Second step",location:{col:1,row:0},result:null,completed:false,dependsOn:[0,4],dependedOnBy:[],comment:"", resolve_list:[]},
+                "2":{id:2,title:"Two",desc:"Third step",location:{col:1,row:1},result:null,completed:false,dependsOn:[0,3],dependedOnBy:[5],comment:"", resolve_list:[]},
                 "3":{id:3,title:"Three",desc:"Fourth step. This one was added manually",location:{col:0,row:2},result:null,completed:false,dependsOn:[],dependedOnBy:[2],comment:"", resolve_list:[{code:"A",desc:"Option A"},{code:"B",desc:"Option B which has been made artifically quite long so it will make the dropdown list need to be shortened a bit"}]},
                 "5":{id:5,title:"Five",desc:"Fifth and Final",location:{col:2,row:1},result:null,completed:false,dependsOn:[2],dependedOnBy:[],comment:"", resolve_list:[{code:"A",desc:"First Choice"},{code:"B",desc:"Second Option"}]}
             },
@@ -59,25 +72,42 @@
 */
         WorkflowUI.drawPlayground(page.wflow, document.getElementById("locFlowDiagramPlayground"), function(event) {
             var can = WorkflowUI.drawPlaygroundCanvas;
-            var x = event.clientX - can.offsetLeft;
-            var y = event.clientY - can.offsetTop;  
+            var x = event.offsetX;
+            var y = event.offsetY;  
             var step = WorkflowUI.stepUnderXY(page.wflow, x, y);
             if (step != null) {
                 page.pickedStepID = step.id;
                 page.editStep(step);
-            }       
+            } else {
+                document.getElementById("locForm").style.display = "none";
+            }
         });
-
+/*
         WorkflowUI.draw(page.wflow, document.getElementById("locFlowDiagram"), function(event) {
             var tr = event.srcElement.parentElement;
             page.pickedStepID = tr.dataset.workflowid;
             var step = page.wflow.getStep(page.pickedStepID);
             page.editStep(step);
         });
+*/
+    }
+    page.move = function(dir, num) {
+        if (page.pickedStepID == null) return;
+        WorkflowUI.move(page.wflow.getStep(page.pickedStepID), dir, num);
+        WorkflowUI.drawPlayground(page.wflow);
+    }
+    page.editComment = function() {
+        var step = page.wflow.getStep(page.pickedStepID);
+        sayGet("Edit comment for this step below", "Comment", step.comment, "Edit Comment", function(rslt) {
+            var step = page.wflow.getStep(page.pickedStepID);
+            step.comment = rslt;
+            var frm = B.getForm("frmStep");
+            frm.set("step_comment", rslt);
+        }, true);
     }
     page.editStep = function(step) {
-        openDialog("frmStep");
-        document.getElementById("locCannotComplete").innerHTML = "";
+        document.getElementById("locForm").style.display = "table-row";
+        //document.getElementById("locCannotComplete").innerHTML = "";
         var frm = B.getForm("frmStep");
         frm.set("step_title", step.title, 
             "step_desc", step.desc, 
@@ -106,7 +136,7 @@
             var txt = depStep.completed ? "&#x2713; " : "&#xD7; ";
             txt += depStep.title;
             opt.innerHTML = txt;
-            opt.style.color = depStep.completed ? "green" : "red";
+            //opt.style.color = depStep.completed ? "green" : "red";
             sel.appendChild(opt);
         }
         document.getElementById("locResolveCheckbox").style.display = "none";
@@ -133,13 +163,13 @@
         if (step.completed) {
             var msg = page.wflow.canComplete(step, false);
             if (msg != "") {
-                document.getElementById("locCannotComplete").innerHTML = msg;
+                //document.getElementById("locCannotComplete").innerHTML = msg;
                 chksel.setAttribute("disabled", "disabled");
             }
         } else {
             var msg = page.wflow.canComplete(step, true);
             if (msg != "") {
-                document.getElementById("locCannotComplete").innerHTML = msg;
+                //document.getElementById("locCannotComplete").innerHTML = msg;
                 chksel.setAttribute("disabled", "disabled");
             }
         }
@@ -148,38 +178,44 @@
 </script>
 </head>
 <body onload='page.init()'>
-    <div id='locFlowDiagram'></div>
-    <div id='locFlowDiagramPlayground'></div>
-    
-    <form class='BDialog' id='frmStep' style='height:500px; width:700px;' title="Step Editor">
-        <table class='form' style='width:100%'>
-            <tr><th>Title:</th><td><input readonly name='step_title' size='30'></td></tr>
-            <tr><th>Description:</th><td><textarea readonly name='step_desc' style='height:4em; width:98%;'></textarea></td></tr>
-            <tr><th>Comment:</th><td><textarea name='step_comment' style='height:5em; width:98%;'></textarea></td></tr>
-            <tr><td colspan='2'>
-                <table style='width:100%'>
-                    <tr>
-                        <td style='width:50%'>
-                            Depends on<br>
-                            <select onfocus='this.selectedIndex = -1; blur()' name='step_dependson' size='5' style='width:98%; height:4.5em;'></select>
-                        </td>
-                        <td style='width:50%'>
-                            Depended on by<br>
-                            <select onfocus='this.selectedIndex = -1; blur()' name='step_dependedonby' size='5' style='width:98%; height:4.5em;'></select>
-                        </td>
-                    </tr></table>
-                </td>
-            </tr>
-
-            <tr id='locResolveCheckbox'><th>Completed:</th><td><label><input type='checkbox' name='step_completed'> <i style='color:brown;'>Check when completed</i></label></td></tr>
-            <tr id='locResolveList'><th>Resolution:</th><td><select style='width:98%' name='step_resolution'><option value=''>Not completed</option></select></td></tr>
-            <tr><td>&nbsp;</td><td id='locCannotComplete' style='font-size:.9em; color:red;'></td></tr>
-        </table>
-        <table style='width:100%'>
-        </div>
-
-        <button class='BDialogButton good' onclick='page.saveStepInfo()'>Save changes</button>
-        <button class='BDialogButton' onclick='popDialog()'>Cancel</button>
-    </form>
+    <table style='width:100%'>
+        <tr>
+            <td id='locFlowDiagramPlayground' style='width:610px; vertical-align: top;'></td>
+            <td id='locForm' style='vertical-align: top; display:none'>
+                <button onclick='page.move("V", -1);'>Up</button>
+                <button onclick='page.move("V", 1);'>Down</button>
+                <button onclick='page.move("H", -1);'>Left</button>
+                <button onclick='page.move("H", 1);'>Right</button><br>
+                <form id='frmStep'>
+                    <table class='form' style='width:100%'>
+                        <tr><th style='width:150px'>Title:</th><td><input readonly name='step_title' size='30'></td></tr>
+                        <tr><th>Description:</th><td><textarea readonly name='step_desc' style='height:4em; width:98%;'></textarea></td></tr>
+                        <tr><th>Comment:<br><button onclick='page.editComment();'>Edit</button></th><td><textarea readonly name='step_comment' style='height:5em; width:98%;'></textarea></td></tr>
+                        <tr><td colspan='2'>
+                            <table style='width:100%'>
+                                <tr>
+                                    <td style='width:50%'>
+                                        Depends on<br>
+                                        <select onfocus='this.selectedIndex = -1; blur()' name='step_dependson' size='5' style='width:98%; height:4.5em;'></select>
+                                    </td>
+                                    <td style='width:50%'>
+                                        Depended on by<br>
+                                        <select onfocus='this.selectedIndex = -1; blur()' name='step_dependedonby' size='5' style='width:98%; height:4.5em;'></select>
+                                    </td>
+                                </tr></table>
+                            </td>
+                        </tr>
+            
+                        <tr style='display:none' id='locResolveCheckbox'><th>Completed:</th><td><label><input type='checkbox' onchange='page.saveStepInfo()' name='step_completed'> <i style='color:coral;'>Check when completed</i></label></td></tr>
+                        <tr style='display:none' id='locResolveList'><th>Resolution:</th><td><select style='width:15em' onchange='page.saveStepInfo()' name='step_resolution'><option value=''>Not completed</option></select></td></tr>
+                        <tr><td>&nbsp;</td><td id='locCannotComplete' style='font-size:.9em; color:red;'></td></tr>
+                    </table>
+                    </div>
+                </form>
+            
+            </td>
+        </tr>
+    </table>
+    <div style='display:none;' id='locFlowDiagram'></div>    
 </body>
 </html>

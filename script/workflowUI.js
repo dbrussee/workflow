@@ -1,6 +1,7 @@
 window.WorkflowUI = {
     masterFlow: null,
-    stepImageWidth: 25,
+    canvasPadding: 10,
+    stepImageWidth: 35,
     stepImageColumnGutter: 60,
     drawPlaygroundLocation: null,
     drawPlaygroundCallback: null,
@@ -169,7 +170,7 @@ WorkflowUI.drawStep = function(can, step) {
         ctx.fillStyle = "#90EE90";
         var msg = wf.canComplete(step, false);
         if (msg != "") {
-            blockColor = "#000000";
+            blockColor = "#008B8B";
         }
     } else {
         for (var i = 0; i < step.dependsOn.length; i++) {
@@ -229,12 +230,12 @@ WorkflowUI.drawConnectors = function(can, step) {
 WorkflowUI.getXY = function(step) {
     var w = WorkflowUI.stepImageWidth;
     var gut = WorkflowUI.stepImageColumnGutter;
-    var x = 10; // Canvas left padding;
+    var x = WorkflowUI.canvasPadding; // Canvas left padding;
     if (step.location.col > 0) {
         x += w * (step.location.col); // add double width
         x += gut * (step.location.col); // add gutter
     }
-    var y = 10; // Canvas top padding + first row height
+    var y = WorkflowUI.canvasPadding; // Canvas top padding + first row height
     y += (step.location.row * (w + 25)); // height of step + room for text
     return {x:x, y:y}
 }
@@ -254,4 +255,13 @@ WorkflowUI.stepUnderXY = function(wf, x, y) {
         }
     }
     return null;
+}
+WorkflowUI.move = function(step, dir, num) {
+    if (dir == "H") {
+        step.location.col += num;
+        if (step.location.col < 0) step.location.col = 0;
+    } else {
+        step.location.row += num;
+        if (step.location.row < 0) step.location.row = 0;
+    }
 }
