@@ -208,15 +208,41 @@ WorkflowUI.drawConnectors = function(can, step) {
     for (var i = 0; i < step.dependsOn.length; i++) {
         var step2 = wf.getStep(step.dependsOn[i]);
         // Connect right edge of step2 to left edge of step
-        var xy = WorkflowUI.getXY(step);
-        var x1 = xy.x;
-        var y1 = xy.y;
-        xy = WorkflowUI.getXY(step2);
-        var x2 = xy.x;
-        var y2 = xy.y;
+        var xy1 = WorkflowUI.getXY(step);
+        var xy2 = WorkflowUI.getXY(step2);
+        var x1 = 0;
+        var x2 = 0;
+        var y1 = 0;
+        var y2 = 0;
+        if (xy1.x == xy2.x) { // Same row
+            if (xy1.y < xy2.y) { // I am above my depend step
+                x1 = xy1.x + w/2; // H Center
+                y1 = xy1.y + w + 5; // V Bottom
+                x2 = xy2.x + w/2; // H Center
+                y2 = xy2.y - 5; // V Top
+            } else { // Below or on top of
+                x1 = xy1.x + w/2; // H Center
+                y1 = xy1.y - 5; // V Bottom
+                x2 = xy2.x + w/2; // H Center
+                y2 = xy2.y + w + 5; // V Bottom
+            }
+        } else { // Different row
+            if (xy1.x < xy2.x) { // I am left of the depend
+                x1 = xy1.x + w + 5; // H Left
+                y1 = xy1.y + w/2 + 5; // V Center
+                x2 = xy2.x - 5; // H Right
+                y2 = xy2.y + w/2 + 5; // V Center
+            } else { // Right or on top of
+                x1 = xy1.x - 5; // H Left
+                y1 = xy1.y + w/2 + 5; // V Center
+                x2 = xy2.x + w + 5; // H Right
+                y2 = xy2.y + w/2 + 5; // V Center
+            }
+        }
         ctx.beginPath();
-        ctx.moveTo(x1 - 5, y1 + (w/2));
-        ctx.lineTo(x2 + w + 5, y2 + (w/2));
+        ctx.moveTo(x1, y1);
+        ctx.lineTo(x2, y2);
+        ctx.arc(x2, y2, 2, 0, 2 * Math.PI);
         if (step2.completed) {
             ctx.strokeStyle = "#228B22";
         } else {
