@@ -13,11 +13,10 @@
 <link rel="stylesheet" type="text/css" href="style/general.css">
 <script>
     var page = {}
-    page.pickedStepID = null;
     page.wflow = null;
     page.saveStepInfo = function() {
         var frm = B.getForm("frmStep");
-        var step = page.wflow.getStep(page.pickedStepID);
+        var step = WorkflowUI.pickedStep;
         var data = frm.get();
         step.comment = data.step_comment;
         if (step.resolve_list.length == 0) {
@@ -32,22 +31,148 @@
             }
         }
         //WorkflowUI.redraw();
-        WorkflowUI.drawPlayground(page.wflow);
+        WorkflowUI.drawCanvas(page.wflow);
+        WorkflowUI.highlightStep(WorkflowUI.canvas, step, true);
+    }
+    page.toggleStep = function() {
+        if (WorkflowUI.pickedStep == null) return;
+        var step = WorkflowUI.pickedStep;
+        if (step.completed) {
+            page.incompleteStep();
+        } else {
+            if (step.resolve_list.length == 0) {
+                page.completeStep();
+            }
+        }
+    }
+    page.incompleteStep = function() {
+        if (WorkflowUI.pickedStep == null) return;
+        var step = WorkflowUI.pickedStep;
+        if (page.wflow.canComplete(step, false) != "") return;
+        var frm = B.getForm("frmStep");
+        frm.set("step_completed", false);
+        frm.set("step_resolution", "");
+        page.saveStepInfo();
+    }
+    page.completeStep = function(val) {
+        if (WorkflowUI.pickedStep == null) return;
+        var step = WorkflowUI.pickedStep;
+        if (page.wflow.canComplete(step, true) != "") return;
+        var frm = B.getForm("frmStep");
+        if (val == undefined) {
+            if (step.resolve_list.length == 0) {
+                frm.set("step_completed", true);
+                frm.set("step_resolution", "");
+                page.saveStepInfo();
+            }
+        } else {
+            if (step.resolve_list.length == 0) {
+                //frm.set("step_completed", true);
+                //frm.set("step_resolution", "");
+                //page.saveStepInfo();
+            } else {
+                var rslt = step.resolve_list[val];
+                if (rslt != null) {
+                    frm.set("step_completed", true);
+                    frm.set("step_resolution", rslt.code);
+                    page.saveStepInfo();
+                }
+            }
+        }
+    }
+    page.pickStep = function(x, y) {
+        if (WorkflowUI.pickedStep == null) return;
+        var step = WorkflowUI.pickedStep;
+        var can = WorkflowUI.canvas;
+        var newstep = null;
+        for (var id in page.wflow.flow.steps) {
+            var test = page.wflow.flow.steps[id];
+            if (test.id == step.id) continue;
+            if (x == 0) {
+                var diff = test.location.col - step.location.col;
+                if (diff != 0) continue;
+                diff = test.location.row - step.location.row;
+                if (y < 0 && diff <= 0) {
+                    if (newstep != null) {
+                        var curdiff = newstep.location.row - step.location.row;
+                        if (curdiff <= 0 && diff > curdiff) {
+                            newstep = test;
+                        }
+                    } else {
+                        newstep = test;
+                    }
+                } else if (y > 0 && diff >= 0) {
+                    if (newstep != null) {
+                        var curdiff = newstep.location.row - step.location.row;
+                        if (curdiff >= 0 && diff < curdiff) {
+                            newstep = test;
+                        }
+                    } else {
+                        newstep = test;
+                    }
+                }
+            } else {
+                var diff = test.location.row - step.location.row;
+                if (diff != 0) continue;
+                diff = test.location.col - step.location.col;
+                if (x > 0 && diff >= 0) {
+                    if (newstep != null) {
+                        var curdiff = newstep.location.col - step.location.col;
+                        if (curdiff >= 0 && diff < curdiff) {
+                            newstep = test;
+                        }
+                    } else {
+                        newstep = test;
+                    }
+                } else if (x < 0 && diff <= 0) {
+                    if (newstep != null) {
+                        var curdiff = newstep.location.col - step.location.col;
+                        if (curdiff <= 0 && diff > curdiff) {
+                            newstep = test;
+                        }
+                    } else {
+                        newstep = test;
+                    }
+                }
+            }
+        }
+        if (newstep != null) {
+            WorkflowUI.highlightStep(can, step, false);
+            WorkflowUI.pickedStep = newstep;
+            page.editStep(newstep);
+            WorkflowUI.highlightStep(can, newstep, true);
+        }
     }
     page.init = function() {
         window.onkeydown = function(event) {
-            //console.log(event.keyCode);
-            //if (event.ctrlKey) {
-                if (event.keyCode == 37) {
-                    page.move("H", -1);
-                } else if (event.keyCode == 39) {
-                    page.move("H", 1);
-                } else if (event.keyCode == 38) {
-                    page.move("V", -1);
-                } else if (event.keyCode == 40) {
-                    page.move("V", 1);
-                }
-            //}
+            console.log(event.keyCode);
+            
+            if (event.keyCode == 38) page.pickStep(0, -1); // Up
+            else if (event.keyCode == 40) page.pickStep(0, 1); // Down
+            else if (event.keyCode == 37) page.pickStep(-1, 0); // Left
+            else if (event.keyCode == 39) page.pickStep(1, 0); // Right
+            else if (event.keyCode == 89) page.completeStep(); // Yes
+            else if (event.keyCode == 78) page.incompleteStep(); // No
+            else if (event.keyCode == 32) page.toggleStep(); // Space
+            else if (event.keyCode == 48) page.incompleteStep(); // Zero
+            else if (event.keyCode == 49) page.completeStep("0"); // One
+            else if (event.keyCode == 50) page.completeStep("1"); // Two
+            else if (event.keyCode == 51) page.completeStep("2"); // Three
+            else if (event.keyCode == 52) page.completeStep("3"); // Four
+            else if (event.keyCode == 53) page.completeStep("4"); // Five
+            else if (event.keyCode == 54) page.completeStep("5"); // Siz
+            else if (event.keyCode == 55) page.completeStep("6"); // Seven
+            else if (event.keyCode == 56) page.completeStep("7"); // Eight
+            else if (event.keyCode == 57) page.completeStep("8"); // Nine
+            else if (event.keyCode == 65) page.completeStep("0"); // A
+            else if (event.keyCode == 66) page.completeStep("1"); // B
+            else if (event.keyCode == 67) page.completeStep("2"); // C
+            else if (event.keyCode == 68) page.completeStep("3"); // D
+            else if (event.keyCode == 69) page.completeStep("4"); // E
+            else if (event.keyCode == 70) page.completeStep("5"); // F
+            else if (event.keyCode == 71) page.completeStep("6"); // G
+            else if (event.keyCode == 72) page.completeStep("7"); // H
+            else if (event.keyCode == 73) page.completeStep("8"); // I
         }
         page.wflow = new Workflow("Test");
         page.wflow.flow = {
@@ -59,9 +184,7 @@
                 "2":{id:2,title:"Two",desc:"Third step",location:{col:1,row:1},result:null,completed:false,dependsOn:[0,3],dependedOnBy:[5],comment:"", resolve_list:[]},
                 "3":{id:3,title:"Three",desc:"Fourth step. This one was added manually",location:{col:0,row:2},result:null,completed:false,dependsOn:[],dependedOnBy:[2],comment:"", resolve_list:[{code:"A",desc:"Option A"},{code:"B",desc:"Option B which has been made artifically quite long so it will make the dropdown list need to be shortened a bit"}]},
                 "5":{id:5,title:"Five",desc:"Fifth and Final",location:{col:2,row:1},result:null,completed:false,dependsOn:[2],dependedOnBy:[],comment:"", resolve_list:[{code:"A",desc:"First Choice"},{code:"B",desc:"Second Option"}]}
-            },
-            "stepsListX":[0,4,1,2,3,5],
-            "stepsList":[0,1,2,3,4,5]
+            }
         }
 /*
         var a = page.wflow.addStep("One", "My first step");
@@ -70,15 +193,19 @@
         page.wflow.setDependsLinks(b, a, c, a);
         //page.wflow.setComplete(a);
 */
-        WorkflowUI.drawPlayground(page.wflow, document.getElementById("locFlowDiagramPlayground"), function(event) {
-            var can = WorkflowUI.drawPlaygroundCanvas;
+        WorkflowUI.drawCanvas(page.wflow, document.getElementById("locFlowDiagramCanvas"), function(event) {
+            var can = WorkflowUI.canvas;
+            if (WorkflowUI.pickedStep != null) WorkflowUI.highlightStep(can, WorkflowUI.pickedStep, false);
             var x = event.offsetX;
             var y = event.offsetY;  
             var step = WorkflowUI.stepUnderXY(page.wflow, x, y);
             if (step != null) {
-                page.pickedStepID = step.id;
+                WorkflowUI.pickedStep = step;;
                 page.editStep(step);
+                WorkflowUI.highlightStep(can, step, true);
+                //debug("clicked step " + step.title);
             } else {
+                WorkflowUI.pickedStep = null;
                 document.getElementById("locForm").style.display = "none";
             }
         });
@@ -92,14 +219,16 @@
 */
     }
     page.move = function(dir, num) {
-        if (page.pickedStepID == null) return;
-        WorkflowUI.move(page.wflow.getStep(page.pickedStepID), dir, num);
-        WorkflowUI.drawPlayground(page.wflow);
+        if (WorkflowUI.pickedStep == null) return;
+        var step = WorkflowUI.pickedStep;
+        WorkflowUI.move(step, dir, num);
+        WorkflowUI.drawCanvas(page.wflow);
+        WorkflowUI.highlightStep(WorkflowUI.canvas, step, true);
     }
     page.editComment = function() {
-        var step = page.wflow.getStep(page.pickedStepID);
+        var step = WorkflowUI.pickedStep;
         sayGet("Edit comment for this step below", "Comment", step.comment, "Edit Comment", function(rslt) {
-            var step = page.wflow.getStep(page.pickedStepID);
+            var step = WorkflowUI.pickedStep;
             step.comment = rslt;
             var frm = B.getForm("frmStep");
             frm.set("step_comment", rslt);
@@ -180,7 +309,7 @@
 <body onload='page.init()'>
     <table style='width:100%'>
         <tr>
-            <td id='locFlowDiagramPlayground' style='width:610px; vertical-align: top;'></td>
+            <td id='locFlowDiagramCanvas' style='width:610px; vertical-align: top;'></td>
             <td id='locForm' style='vertical-align: top; display:none'>
                 <button onclick='page.move("V", -1);'>Up</button>
                 <button onclick='page.move("V", 1);'>Down</button>
@@ -216,6 +345,8 @@
             </td>
         </tr>
     </table>
+    <span class='anchor' onclick='document.getElementById("locDebug").innerHTML = ""'>Clear</span>
+    <div id='locDebug'></div>
     <div style='display:none;' id='locFlowDiagram'></div>    
 </body>
 </html>
