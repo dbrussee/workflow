@@ -3,8 +3,7 @@ var Workflow = function(name) {
     this.drawCallback = null;
     this.flow = {
         name: name,
-        steps: {},
-        stepsList: []
+        steps: {}
     }
     return this;
 }
@@ -22,7 +21,7 @@ Workflow.prototype.getStep = function(step) {
     if (typeof(step) == "object") {
         return step;
     } else {
-        return this.flow.steps[step];
+        return this.flow.steps["S" + step];
     }
 }
 Workflow.prototype.addStep = function(title, desc) {
