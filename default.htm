@@ -12,6 +12,7 @@
 <script src='script/workflowUI.js'></script>
 <link rel="stylesheet" type="text/css" href="style/general.css">
 <script>
+    // Pre-Release version 0.01 - 9/16/2020 - dbrussee
     var page = {}
     page.wflow = null;
     page.saveStepInfo = function() {
@@ -30,9 +31,106 @@
                 step.result = data.step_resolution;
             }
         }
-        //WorkflowUI.redraw();
         WorkflowUI.drawCanvas(page.wflow);
         WorkflowUI.highlightStep(WorkflowUI.canvas, step, true);
+    }
+    page.createStep = function() {
+        var nextNum = 0;
+        for (var stepnum in page.wflow.flow.steps) { nextNum++; }
+        var obj = {
+            id: nextNum,
+            title: 'New Step #' + nextNum,
+            desc: 'New Step #' + nextNum,
+            location: {col:WorkflowUI.pickedSpot.col, row:WorkflowUI.pickedSpot.row},
+            result:null, completed:false, dependsOn:[], dependedOnBy:[],
+            comment:'', resolve_list:[]
+        }
+        page.wflow.flow.steps["S" + nextNum] = obj;
+        WorkflowUI.drawCanvas(page.wflow);
+        WorkflowUI.highlightStep(WorkflowUI.canvas, obj, true);
+        WorkflowUI.pickedStep = obj;
+        page.editStep(obj);
+    }
+    page.addBlockStep = function(spn, bstep) {
+        if (spn != null) {
+            //TODO - Show something to the user
+            WorkflowUI.dragstart = null; // Stop dragging
+            WorkflowUI.pickAction = "addBlock";
+            say("Click a step to add as a blocking step for this step");
+        } else {
+            WorkflowUI.pickAction = null;
+            WorkflowUI.dragstart = null; // Stop dragging
+            var step = WorkflowUI.pickedStep;
+            for (var i = 0; i < step.dependedOnBy.length; i++) {
+                if (step.dependedOnBy[i] == bstep.id) {
+                    return; // Already set
+                }
+            }
+            step.dependsOn.push(bstep.id);
+            bstep.dependedOnBy.push(step.id);
+
+            WorkflowUI.drawCanvas(page.wflow);
+            page.editStep(step);
+
+        }
+    }
+    page.addBlockedByStep = function(spn, bstep) {
+        if (spn != null) {
+            //TODO - Show something to the user
+            WorkflowUI.dragstart = null; // Stop dragging
+            WorkflowUI.pickAction = "addBlockedBy";
+            say("Click a step to add as a blocking step for this step");
+        } else {
+            WorkflowUI.pickAction = null;
+            WorkflowUI.dragstart = null; // Stop dragging
+            var step = WorkflowUI.pickedStep;
+            for (var i = 0; i < step.dependsOn.length; i++) {
+                if (step.dependsOn[i] == bstep.id) {
+                    return; // Already set
+                }
+            }
+            step.dependedOnBy.push(bstep.id);
+            bstep.dependsOn.push(step.id);
+
+            WorkflowUI.drawCanvas(page.wflow);
+            page.editStep(step);
+        }
+    }
+    page.removeBlockedBy = function(spn, blockid) {
+        var step = WorkflowUI.pickedStep;
+        for (var i = 0; i < step.dependsOn.length; i++) {
+            if (step.dependsOn[i] == blockid) {
+                step.dependsOn.splice(i,1); // Remove that item
+                break;
+            }
+        }
+        var other = page.wflow.getStep(blockid);
+        for (var i = 0; i < other.dependedOnBy.length; i++) {
+            if (other.dependedOnBy[i] == step.id) {
+                other.dependedOnBy.splice(i,1); // Remove that item
+                break;
+            }
+        }
+        WorkflowUI.drawCanvas(page.wflow);
+        page.editStep(step);
+    }
+    page.removeBlock = function(spn, blockid) {
+        var step = WorkflowUI.pickedStep;
+        for (var i = 0; i < step.dependedOnBy.length; i++) {
+            if (step.dependedOnBy[i] == blockid) {
+                step.dependedOnBy.splice(i,1); // Remove that item
+                break;
+            }
+        }
+        var other = page.wflow.getStep(blockid);
+        for (var i = 0; i < other.dependsOn.length; i++) {
+            if (other.dependsOn[i] == step.id) {
+                other.dependsOn.splice(i,1); // Remove that item
+                break;
+            }
+        }
+        WorkflowUI.drawCanvas(page.wflow);
+        page.editStep(step);
     }
     page.toggleStep = function() {
         if (WorkflowUI.pickedStep == null) return;
@@ -79,6 +177,16 @@
                 }
             }
         }
+    }
+    page.pickStepId = function(id) {
+        var can = WorkflowUI.canvas;
+        if (WorkflowUI.pickedStep != null) {
+            WorkflowUI.highlightStep(can, WorkflowUI.pickedStep, false);
+        }
+        var step = page.wflow.getStep(id);
+        WorkflowUI.pickedStep = step;
+        page.editStep(step);
+        WorkflowUI.highlightStep(can, step, true);
     }
     page.pickStep = function(x, y) {
         if (WorkflowUI.pickedStep == null) return;
@@ -145,8 +253,8 @@
     }
     page.init = function() {
         window.onkeydown = function(event) {
-            console.log(event.keyCode);
-            
+            //console.log(event.keyCode);
+            var block = true;
             if (event.keyCode == 38) page.pickStep(0, -1); // Up
             else if (event.keyCode == 40) page.pickStep(0, 1); // Down
             else if (event.keyCode == 37) page.pickStep(-1, 0); // Left
@@ -173,17 +281,19 @@
             else if (event.keyCode == 71) page.completeStep("6"); // G
             else if (event.keyCode == 72) page.completeStep("7"); // H
             else if (event.keyCode == 73) page.completeStep("8"); // I
+            else block = false;
+            if (block) event.preventDefault();
         }
         page.wflow = new Workflow("Test");
         page.wflow.flow = {
             "name":"Test",
             "steps":{
-                "0":{id:0,title:"Zero",desc:"My first step",location:{col:0,row:0},result:null,completed:false,dependsOn:[],dependedOnBy:[1,2],comment:"Sample comment",resolve_list:[]},
-                "4":{id:4,title:"Four",desc:"First PLUS",location:{col:0,row:1},result:null,completed:false,dependsOn:[],dependedOnBy:[1],comment:"", resolve_list:[]},
-                "1":{id:1,title:"One",desc:"Second step",location:{col:1,row:0},result:null,completed:false,dependsOn:[0,4],dependedOnBy:[],comment:"", resolve_list:[]},
-                "2":{id:2,title:"Two",desc:"Third step",location:{col:1,row:1},result:null,completed:false,dependsOn:[0,3],dependedOnBy:[5],comment:"", resolve_list:[]},
-                "3":{id:3,title:"Three",desc:"Fourth step. This one was added manually",location:{col:0,row:2},result:null,completed:false,dependsOn:[],dependedOnBy:[2],comment:"", resolve_list:[{code:"A",desc:"Option A"},{code:"B",desc:"Option B which has been made artifically quite long so it will make the dropdown list need to be shortened a bit"}]},
-                "5":{id:5,title:"Five",desc:"Fifth and Final",location:{col:2,row:1},result:null,completed:false,dependsOn:[2],dependedOnBy:[],comment:"", resolve_list:[{code:"A",desc:"First Choice"},{code:"B",desc:"Second Option"}]}
+                "S0":{id:0,title:"Zero",desc:"My first step",location:{col:0,row:0},result:null,completed:false,dependsOn:[],dependedOnBy:[1,2],comment:"Sample comment",resolve_list:[]},
+                "S4":{id:4,title:"Four",desc:"First PLUS",location:{col:0,row:1},result:null,completed:false,dependsOn:[],dependedOnBy:[1],comment:"", resolve_list:[]},
+                "S1":{id:1,title:"One",desc:"Second step",location:{col:1,row:0},result:null,completed:false,dependsOn:[0,4],dependedOnBy:[],comment:"", resolve_list:[]},
+                "S2":{id:2,title:"Two",desc:"Third step",location:{col:1,row:1},result:null,completed:false,dependsOn:[0,3],dependedOnBy:[5],comment:"", resolve_list:[]},
+                "S3":{id:3,title:"Three",desc:"Fourth step. This one was added manually",location:{col:0,row:2},result:null,completed:false,dependsOn:[],dependedOnBy:[2],comment:"", resolve_list:[{code:"A",desc:"Option A"},{code:"B",desc:"Option B which has been made artifically quite long so it will make the dropdown list need to be shortened a bit"}]},
+                "S5":{id:5,title:"Five",desc:"Fifth and Final",location:{col:2,row:1},result:null,completed:false,dependsOn:[2],dependedOnBy:[],comment:"", resolve_list:[{code:"A",desc:"First Choice"},{code:"B",desc:"Second Option"}]}
             }
         }
 /*
@@ -198,25 +308,31 @@
             if (WorkflowUI.pickedStep != null) WorkflowUI.highlightStep(can, WorkflowUI.pickedStep, false);
             var x = event.offsetX;
             var y = event.offsetY;  
+            WorkflowUI.pickedSpot = WorkflowUI.rowColForXY(x, y);
             var step = WorkflowUI.stepUnderXY(page.wflow, x, y);
+            console.log("Click: pickAction = " + WorkflowUI.pickAction);
             if (step != null) {
-                WorkflowUI.pickedStep = step;;
-                page.editStep(step);
-                WorkflowUI.highlightStep(can, step, true);
-                //debug("clicked step " + step.title);
+                if (WorkflowUI.pickAction == null) {
+                    WorkflowUI.pickedStep = step;
+                    page.editStep(step);
+                    WorkflowUI.highlightStep(can, step, true);
+                    document.getElementById("locCreateButton").style.display = "none";
+                } else if (WorkflowUI.pickAction == "addBlock") {
+                    page.addBlockStep(null, step);
+                } else if (WorkflowUI.pickAction == "addBlockedBy") {
+                    page.addBlockedByStep(null, step);
+                }
             } else {
+                WorkflowUI.pickAction = null; // Reset any pending actions
+                if (WorkflowUI.pickAction != null) {
+                    WorkflowUI.pickAction = null;
+                    page.editStep(WorkflowUI.pickedStep);
+                }
                 WorkflowUI.pickedStep = null;
-                document.getElementById("locForm").style.display = "none";
+                document.getElementById("frmStep").style.display = "none";
+                document.getElementById("locCreateButton").style.display = "inline-block";
             }
         });
-/*
-        WorkflowUI.draw(page.wflow, document.getElementById("locFlowDiagram"), function(event) {
-            var tr = event.srcElement.parentElement;
-            page.pickedStepID = tr.dataset.workflowid;
-            var step = page.wflow.getStep(page.pickedStepID);
-            page.editStep(step);
-        });
-*/
     }
     page.move = function(dir, num) {
         if (WorkflowUI.pickedStep == null) return;
@@ -230,31 +346,61 @@
         sayGet("Edit comment for this step below", "Comment", step.comment, "Edit Comment", function(rslt) {
             var step = WorkflowUI.pickedStep;
             step.comment = rslt;
-            var frm = B.getForm("frmStep");
-            frm.set("step_comment", rslt);
+            document.getElementById("step_comment").innerHTML = step.comment;
         }, true);
     }
     page.editStep = function(step) {
-        document.getElementById("locForm").style.display = "table-row";
+        document.getElementById("frmStep").style.display = "block";
         //document.getElementById("locCannotComplete").innerHTML = "";
         var frm = B.getForm("frmStep");
         frm.set("step_title", step.title, 
-            "step_desc", step.desc, 
-            "step_comment", step.comment,
             "step_completed", step.completed);
-        var sel = frm.getElement("step_dependson").domElements;
-        sel.options.length = 0;
-        for (var i = 0; i < step.dependsOn.length; i++) {
-            var depid = step.dependsOn[i];
-            var depStep = page.wflow.getStep(depid);
-            var opt = document.createElement("option");
-            opt.value = depid;
-            var txt = depStep.completed ? "&#x2713; " : "&#xD7; ";
-            txt += depStep.title;
-            opt.innerHTML = txt;
-            opt.style.color = depStep.completed ? "green" : "red";
-            sel.appendChild(opt);
+        document.getElementById("step_desc").innerHTML = step.desc;
+        document.getElementById("step_comment").innerHTML = step.comment;
+        var loc = document.getElementById("step_dependson");
+        loc.innerHTML = "";
+        if (step.dependsOn.length == 0) {
+            loc.innerHTML = "&lt;None&gt;";
+        } else {
+            var ul = document.createElement("ul");
+            ul.style.listStyleType="none";
+            for (var i = 0; i < step.dependsOn.length; i++) {
+                var depid = step.dependsOn[i];
+                var depStep = page.wflow.getStep(depid);
+                var li = document.createElement("li");
+                li.innerHTML = "";
+                var txt = depStep.completed ? "&#x2713; " : "&nbsp;&nbsp; ";
+                txt += "<span class='anchor' onclick='page.pickStepId(" + depStep.id + ")'>" + depStep.title + "</span>";
+                txt += "&nbsp;&nbsp;";
+                txt += "<span class='anchor' style='color:red' onclick='page.removeBlockedBy(this, " + depStep.id + ")'>[&#xD7;]</span>";
+                li.innerHTML = txt;
+                li.style.color = depStep.completed ? "green" : "red";
+                ul.appendChild(li);
+            }
+            loc.appendChild(ul);
         }
+        var loc = document.getElementById("step_dependedonby");
+        loc.innerHTML = "";
+        if (step.dependedOnBy.length == 0) {
+            loc.innerHTML = "&lt;None&gt;";
+        } else {
+            var ul = document.createElement("ul");
+            ul.style.listStyleType="none";
+            for (var i = 0; i < step.dependedOnBy.length; i++) {
+                var depid = step.dependedOnBy[i];
+                var depStep = page.wflow.getStep(depid);
+                var li = document.createElement("li");
+                li.innerHTML = "";
+                var txt = depStep.completed ? "&#x2713; " : "&nbsp;&nbsp; ";
+                txt += "<span class='anchor' onclick='page.pickStepId(" + depStep.id + ")'>" + depStep.title + "</span>";
+                txt += "&nbsp;&nbsp;";
+                txt += "<span class='anchor' style='color:red' onclick='page.removeBlock(this, " + depStep.id + ")'>[&#xD7;]</span>";
+                li.innerHTML = txt;
+                ul.appendChild(li);
+            }
+            loc.appendChild(ul);
+        }
+        /*
         var sel = frm.getElement("step_dependedonby").domElements;
         sel.options.length = 0;
         for (var i = 0; i < step.dependedOnBy.length; i++) {
@@ -268,6 +414,7 @@
             //opt.style.color = depStep.completed ? "green" : "red";
             sel.appendChild(opt);
         }
+        */
         document.getElementById("locResolveCheckbox").style.display = "none";
         document.getElementById("locResolveList").style.display = "none";
         var chksel = null;
@@ -309,27 +456,34 @@
 <body onload='page.init()'>
     <table style='width:100%'>
         <tr>
-            <td id='locFlowDiagramCanvas' style='width:610px; vertical-align: top;'></td>
-            <td id='locForm' style='vertical-align: top; display:none'>
+            <td style='vertical-align: top; width:650px;'>
+                <div style='position:relative; width:610px; height: 400px; overflow:scroll;'>
+                    <div id='locFlowDiagramCanvas'></div>
+                </div>
+            </td>
+            <td id='locForm' style='vertical-align: top; text-align: left; width:calc(100vw - 650px)'>
+                <span style='display:none' id='locCreateButton'><button onclick='page.createStep()'>Create Step Here</button></span>
+                <!--
                 <button onclick='page.move("V", -1);'>Up</button>
                 <button onclick='page.move("V", 1);'>Down</button>
                 <button onclick='page.move("H", -1);'>Left</button>
                 <button onclick='page.move("H", 1);'>Right</button><br>
-                <form id='frmStep'>
-                    <table class='form' style='width:100%'>
-                        <tr><th style='width:150px'>Title:</th><td><input readonly name='step_title' size='30'></td></tr>
-                        <tr><th>Description:</th><td><textarea readonly name='step_desc' style='height:4em; width:98%;'></textarea></td></tr>
-                        <tr><th>Comment:<br><button onclick='page.editComment();'>Edit</button></th><td><textarea readonly name='step_comment' style='height:5em; width:98%;'></textarea></td></tr>
+                -->
+                <form id='frmStep' style='display:none'>
+                    <table class='form'>
+                        <tr><th>Title:</th><td><input readonly name='step_title' size='30'></td></tr>
+                        <tr><th>Description:</th><td id='step_desc'></textarea></td></tr>
+                        <tr><th><span class='anchor' onclick='page.editComment();'>Comment</span>:</th><td id='step_comment'></td></tr>
                         <tr><td colspan='2'>
                             <table style='width:100%'>
                                 <tr>
                                     <td style='width:50%'>
-                                        Blocked by<br>
-                                        <select onfocus='this.selectedIndex = -1; blur()' name='step_dependson' size='5' style='width:98%; height:4.5em;'></select>
+                                        Blocked by [<span class='anchor' onclick='page.addBlockStep(this)'>add</span>]<br>
+                                        <span id='step_dependson'></span>
                                     </td>
                                     <td style='width:50%'>
-                                        Blocks<br>
-                                        <select onfocus='this.selectedIndex = -1; blur()' name='step_dependedonby' size='5' style='width:98%; height:4.5em;'></select>
+                                        Blocks [<span class='anchor' onclick='page.addBlockedByStep(this)'>add</span>]<br>
+                                        <span id='step_dependedonby'></span>
                                     </td>
                                 </tr></table>
                             </td>
