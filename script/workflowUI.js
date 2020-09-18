@@ -104,8 +104,6 @@ WorkflowUI.drawCanvas = function(workflow, div, callback) {
         div.appendChild(can);
     } else {
         workflow = WorkflowUI.masterFlow;
-        div = WorkflowUI.drawCanvasLocation;
-        callback = WorkflowUI.drawCanvasCallback;
         var ctx = WorkflowUI.canvas.getContext("2d");
         ctx.clearRect(0,0,WorkflowUI.canvas.width, WorkflowUI.canvas.height);
     }
@@ -116,8 +114,8 @@ WorkflowUI.drawCanvas = function(workflow, div, callback) {
     }
     for (var id in workflow.flow.steps) {
         var step = workflow.flow.steps[id];
-        WorkflowUI.drawConnectors(WorkflowUI.canvas, step);
         WorkflowUI.drawStep(WorkflowUI.canvas, step);
+        WorkflowUI.drawConnectors(WorkflowUI.canvas, step, true);
         if (WorkflowUI.pickedStep != null) {
             if (step.id == WorkflowUI.pickedStep.id) {
                 WorkflowUI.highlightStep(WorkflowUI.canvas, step, true);
@@ -126,19 +124,41 @@ WorkflowUI.drawCanvas = function(workflow, div, callback) {
     }
 }
 
-
-
-WorkflowUI.drawStep = function(can, step) {
+WorkflowUI.clearPickedSpot = function() {
+    var xy = WorkflowUI.getXYForRowColumn(WorkflowUI.pickedSpot.row, WorkflowUI.pickedSpot.col);
+    var ctr = {x:xy.x + (xy.w/2), y:xy.y + (xy.h/2)}
+    var ctx = WorkflowUI.canvas.getContext("2d");
+    ctx.clearRect(ctr.x - 5,ctr.y - 5, 10, 10);
+}
+WorkflowUI.markPickedSpot = function() {
+    var xy = WorkflowUI.getXYForRowColumn(WorkflowUI.pickedSpot.row, WorkflowUI.pickedSpot.col);
+    var ctr = {x:xy.x + (xy.w/2), y:xy.y + (xy.h/2)}
+    var ctx = WorkflowUI.canvas.getContext("2d");
+    ctx.beginPath();
+    ctx.moveTo(ctr.x, ctr.y-5);
+    ctx.lineTo(ctr.x, ctr.y+5);
+    ctx.moveTo(ctr.x-5, ctr.y);
+    ctx.lineTo(ctr.x+5, ctr.y);
+    ctx.strokeStyle = "red";
+    ctx.stroke();
+}
+WorkflowUI.drawStep = function(can, step, highlight) {
+    if (highlight == undefined) highlight = false;
+    var ctx = can.getContext("2d");
     var wf = WorkflowUI.masterFlow;
     var w = WorkflowUI.stepImageWidth;
     var gut = WorkflowUI.stepImageColumnGutter;
     var stepSize = w/3;
-    var ctx = can.getContext("2d");
     var xy = WorkflowUI.getXY(step);
     var x = xy.x;
     var y = xy.y;
-    WorkflowUI.highlightStep(can, step, false);
+    ctx.clearRect(xy.x - 10,xy.y - 10, xy.w + 20, xy.h + 20);
+    ctx.save();
     ctx.beginPath();
+    if (highlight) {
+        ctx.shadowBlur = 12;
+        ctx.shadowColor = "yellow";    
+    }
     ctx.moveTo(x, y+w); // Start at lower left
     ctx.lineTo(x+w, y+w); // Bottom
     ctx.lineTo(x+w, y); // Right edge
@@ -199,64 +219,49 @@ WorkflowUI.drawConnectors = function(can, step, withDependedOnBy) {
     var w = WorkflowUI.stepImageWidth;
     var gut = WorkflowUI.stepImageColumnGutter;
     var ctx = can.getContext("2d");
+    var xy1 = WorkflowUI.getXY(step);
     for (var i = 0; i < step.dependsOn.length; i++) {
         var step2 = wf.getStep(step.dependsOn[i]);
-        // Connect right edge of step2 to left edge of step
-        var xy1 = WorkflowUI.getXY(step);
         var xy2 = WorkflowUI.getXY(step2);
         var x1 = xy1.x + WorkflowUI.stepImageWidth / 2;
         var y1 = xy1.y + WorkflowUI.stepImageWidth / 2;
         var x2 = xy2.x + WorkflowUI.stepImageWidth / 2;
         var y2 = xy2.y + WorkflowUI.stepImageWidth / 2;
-        var len = WorkflowUI.lineLength(x1, y1, x2, y2);
-        var mx = x1 - x2;
-        var my = y1 - y2;
-        var angle = Math.atan2(my, mx);// * 180 * Math.PI;
-        var ctx = WorkflowUI.canvas.getContext("2d");
-        ctx.save();
-        ctx.beginPath();
-        ctx.translate(x2,y2);
-        ctx.rotate(angle);
-        ctx.moveTo(WorkflowUI.connectorLineCenterOffset, 0);
-        ctx.lineTo(len - WorkflowUI.connectorLineCenterOffset, 0);
-
-        ctx.strokeStyle = "grey";
-        ctx.lineWidth = 1;
-        ctx.stroke();
-        ctx.restore();
-        var color = step2.completed ? "#228B22" : "#FF2000";
-        WorkflowUI.drawArrowAtEnd(x1, y1, x2, y2, color);
+        WorkflowUI.drawLine(x1, y1, x2, y2, 1, "grey");
+        WorkflowUI.drawArrowAtEnd(x1, y1, x2, y2, step2.completed ? "#228B22" : "#FF2000");
     }
     for (var i = 0; i < step.dependedOnBy.length; i++) {
         var step2 = wf.getStep(step.dependedOnBy[i]);
-        WorkflowUI.drawConnectors(can, step2, false);
+        var xy2 = WorkflowUI.getXY(step2);
+        var x1 = xy1.x + WorkflowUI.stepImageWidth / 2;
+        var y1 = xy1.y + WorkflowUI.stepImageWidth / 2;
+        var x2 = xy2.x + WorkflowUI.stepImageWidth / 2;
+        var y2 = xy2.y + WorkflowUI.stepImageWidth / 2;
+        WorkflowUI.drawLine(x1, y1, x2, y2, 1, "grey");
+        WorkflowUI.drawArrowAtEnd(x2, y2, x1, y1, step2.completed ? "#228B22" : "#FF2000");
     }
-
 }
-WorkflowUI.highlightStep = function(can, step, showHighlight) {
-    if (showHighlight == undefined) showHighlight = true;
-    var wf = WorkflowUI.masterFlow;
-    var w = WorkflowUI.stepImageWidth;
-    var ctx = can.getContext("2d");
-    var xy = WorkflowUI.getXY(step);
+WorkflowUI.drawLine = function(x1, y1, x2, y2, thick, clr) {
+    if (thick == undefined || thick == null) thick = 1;
+    if (clr == undefined) clr = "black";
+    var ctx = WorkflowUI.canvas.getContext("2d");
+    var len = WorkflowUI.lineLength(x1, y1, x2, y2);
+    var mx = x1 - x2;
+    var my = y1 - y2;
+    var angle = Math.atan2(my, mx);// * 180 * Math.PI;
+    ctx.save();
     ctx.beginPath();
-    ctx.strokeStyle = (showHighlight ? "yellow" : "white"); // aqua or white
-    ctx.lineWidth = (showHighlight ? 3 : 5);
-    //ctx.moveTo(xy.x - 3, xy.y + xy.h + 10);
-    //ctx.lineTo(xy.x + xy.w + 3, xy.y + xy.h + 10);
-    //ctx.strokeStyle = (showHighlight ? "#00FFFF" : "#FFFFFF"); // aqua or white
-    //ctx.lineWidth = 15;
-    ctx.moveTo(xy.x - 4, xy.y - 4);
-    ctx.lineTo(xy.x + xy.w + 4, xy.y - 4);
-    ctx.lineTo(xy.x + xy.w + 4, xy.y + xy.h + 4);
-    ctx.lineTo(xy.x - 4, xy.y + xy.h + 4);
-    ctx.closePath();
+    ctx.translate(x2,y2);
+    ctx.rotate(angle);
+    ctx.moveTo(WorkflowUI.connectorLineCenterOffset, 0);
+    ctx.lineTo(len - WorkflowUI.connectorLineCenterOffset, 0);
+    ctx.strokeStyle = clr;
+    ctx.lineWidth = thick;
     ctx.stroke();
     ctx.restore();
-    ctx.font = "8pt Arial";
-    ctx.fillStyle = "#000000"; // Back to black
-    ctx.fillText(step.title, xy.x, xy.y+xy.w+12);
-    ctx.restore();
+}
+WorkflowUI.highlightStep = function(can, step, showHighlight) {
+    WorkflowUI.drawStep(can, step, showHighlight);
     WorkflowUI.drawConnectors(can, step, true);
 }
 WorkflowUI.rowColForXY = function(x, y) {
@@ -274,6 +279,18 @@ WorkflowUI.getXY = function(step) {
     }
     var y = WorkflowUI.canvasPadding; // Canvas top padding + first row height
     y += (step.location.row * (w + WorkflowUI.stepImageVertSpace)); // height of step + room for text
+    return {x:x, y:y, w:w, h:w}
+}
+WorkflowUI.getXYForRowColumn = function(row, col) {
+    var w = WorkflowUI.stepImageWidth;
+    var gut = WorkflowUI.stepImageColumnGutter;
+    var x = WorkflowUI.canvasPadding; // Canvas left padding;
+    if (col > 0) {
+        x += w * col; // add double width
+        x += gut * col; // add gutter
+    }
+    var y = WorkflowUI.canvasPadding; // Canvas top padding + first row height
+    y += (row * (w + WorkflowUI.stepImageVertSpace)); // height of step + room for text
     return {x:x, y:y, w:w, h:w}
 }
 WorkflowUI.stepUnderXY = function(wf, x, y) {
@@ -325,14 +342,13 @@ WorkflowUI.lineLength = function(x1, y1, x2, y2) {
     var c = Math.sqrt( a*a + b*b )
     return c;
 }
-function debug(txt, clear) {
+function debug(txt, clr) {
+    if (txt == undefined || txt == null) txt = "";
     var div = document.getElementById("locDebug");
-    if (clear) {
+    if (div != undefined) {
         div.innerHTML = "";
-    } else {
-        if (div != undefined) {
-            if (div.innerHTML != "") div.innerHTML += "<br>";
-        }
+        if (clr == undefined) clr = "black";
+        div.innerHTML = txt;
+        div.style.color = clr;
     }
-    div.innerHTML += txt;
 }
