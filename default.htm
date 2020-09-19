@@ -102,32 +102,14 @@
             debug("Click a step to add as a blocking step for this step...");
         } else {
             debug("");
-            var ok = "";
             WorkflowUI.pickAction = null;
-            WorkflowUI.dragstart = null; // Stop dragging
-            var step = WorkflowUI.pickedStep;
-            if (step.id == bstep.id) ok = false; // Picked the same step
-            for (var i = 0; i < step.dependsOn.length; i++) {
-                if (step.dependsOn[i] == bstep.id) {
-                    ok = "Already set"; // Already set
-                    break;
-                }
+            var rslt =  page.wflow.setBlockedBy(WorkflowUI.pickedStep, bstep);
+            if (rslt.error != "") {
+                debug(rslt.error, "red");
+            } else {
+                page.editStep(rslt.blockedStep);
+                page.wflow.highlightStep(rslt.blockedStep, true);
             }
-            for (var i = 0; i < step.dependedOnBy.length; i++) {
-                if (step.dependedOnBy[i] == bstep.id) {
-                    ok = "Already set as Blocked By... Cant be both"; // Cant be both
-                    break;
-                }
-            }
-            if (ok == "") {
-                step.dependsOn.push(bstep.id);
-                bstep.dependedOnBy.push(step.id);
-            }
-
-            WorkflowUI.drawCanvas(page.wflow);
-            page.editStep(step);
-            WorkflowUI.highlightStep(WorkflowUI.canvas, step, true);
-            if (ok != "") debug(ok, "red");
 
         }
     }
@@ -138,32 +120,13 @@
             debug("Click a step to add as a blocking step for this step...");
         } else {
             debug("");
-            var ok = "";
-            WorkflowUI.pickAction = null;
-            WorkflowUI.dragstart = null; // Stop dragging
-            var step = WorkflowUI.pickedStep;
-            if (step.id == bstep.id) ok = false; // Picked the same step
-            for (var i = 0; i < step.dependedOnBy.length; i++) {
-                if (step.dependedOnBy[i] == bstep.id) {
-                    ok = "Already set"; // Already set
-                    break;
-                }
+            var rslt = page.wflow.setBlockedBy(bstep, WorkflowUI.pickedStep);
+            if (rslt.error != "") {
+                debug(rslt.error, "red");
+            } else {
+                page.editStep(rslt.blockedByStep);
+                page.wflow.highlightStep(rslt.blockedByStep, true);
             }
-            for (var i = 0; i < step.dependsOn.length; i++) {
-                if (step.dependsOn[i] == bstep.id) {
-                    ok = "Already set as Blocking... cant be both"; // Cant be both
-                    break;
-                }
-            }
-            if (ok == "") {
-                step.dependedOnBy.push(bstep.id);
-                bstep.dependsOn.push(step.id);
-            }
-
-            WorkflowUI.drawCanvas(page.wflow);
-            page.editStep(step);
-            WorkflowUI.highlightStep(WorkflowUI.canvas, step, true);
-            if (ok != "") debug(ok, "red");
         }
     }
     page.removeBlockedBy = function(spn, blockid) {
@@ -249,19 +212,17 @@
         }
     }
     page.pickStepId = function(id) {
-        var can = WorkflowUI.canvas;
         if (WorkflowUI.pickedStep != null) {
-            WorkflowUI.highlightStep(can, WorkflowUI.pickedStep, false);
+            page.wflow.highlightStep(WorkflowUI.pickedStep, false);
         }
         var step = page.wflow.getStep(id);
         WorkflowUI.pickedStep = step;
         page.editStep(step);
-        WorkflowUI.highlightStep(can, step, true);
+        page.wflow.highlightStep(step, true);
     }
     page.pickStep = function(x, y) {
         if (WorkflowUI.pickedStep == null) return;
         var step = WorkflowUI.pickedStep;
-        var can = WorkflowUI.canvas;
         var newstep = null;
         for (var id in page.wflow.flow.steps) {
             var test = page.wflow.flow.steps[id];
@@ -315,10 +276,10 @@
             }
         }
         if (newstep != null) {
-            WorkflowUI.highlightStep(can, step, false);
+            page.wflow.highlightStep(step, false);
             WorkflowUI.pickedStep = newstep;
             page.editStep(newstep);
-            WorkflowUI.highlightStep(can, newstep, true);
+            page.wflow.highlightStep(newstep, true);
         }
     }
     page.init = function() {
@@ -413,13 +374,6 @@
                 WorkflowUI.markPickedSpot();
             }
         });
-    }
-    page.move = function(dir, num) {
-        if (WorkflowUI.pickedStep == null) return;
-        var step = WorkflowUI.pickedStep;
-        WorkflowUI.move(step, dir, num);
-        WorkflowUI.drawCanvas(page.wflow);
-        WorkflowUI.highlightStep(WorkflowUI.canvas, step, true);
     }
     page.editComment = function() {
         var step = WorkflowUI.pickedStep;
@@ -516,6 +470,16 @@
             }
         }
     }
+function debug(txt, clr) {
+    if (txt == undefined || txt == null) txt = "";
+    var div = document.getElementById("locDebug");
+    if (div != undefined) {
+        div.innerHTML = "";
+        if (clr == undefined) clr = "black";
+        div.innerHTML = txt;
+        div.style.color = clr;
+    }
+}
 
 </script>
 </head>
@@ -529,12 +493,6 @@
             </td>
             <td id='locForm' style='vertical-align: top; text-align: left; width:calc(100vw - 650px)'>
                 <span style='display:none' id='locCreateButton'><button onclick='page.createStep()'>Create Step Here</button></span>
-                <!--
-                <button onclick='page.move("V", -1);'>Up</button>
-                <button onclick='page.move("V", 1);'>Down</button>
-                <button onclick='page.move("H", -1);'>Left</button>
-                <button onclick='page.move("H", 1);'>Right</button><br>
-                -->
                 <form id='frmStep' style='display:none'>
                     <button onclick='page.askToDeleteStep()'>Delete This Step</button>
                     <table class='form'>

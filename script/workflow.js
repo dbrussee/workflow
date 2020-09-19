@@ -1,9 +1,14 @@
 var Workflow = function(name) {
     this.drawLocation = null;
     this.drawCallback = null;
+    this.activeStep = null;
     this.flow = {
         name: name,
         steps: {}
+    }
+    this.event = {
+        onStepDeleted: function(data) { },
+        onBlockedByAdded: function(data) { }
     }
     return this;
 }
@@ -18,6 +23,7 @@ var WorkflowStep = function(workflow, title, desc) {
     return this;
 }
 Workflow.prototype.getStep = function(step) {
+    if (step == undefined) return;
     if (typeof(step) == "object") {
         return step;
     } else {
@@ -29,6 +35,37 @@ Workflow.prototype.addStep = function(title, desc) {
     this.flow.steps[step.id] = step;
     this.flow.stepsList.push(step.id);
     return step;
+}
+Workflow.prototype.setBlockedBy = function(blockedStep, blockedByStep) {
+    WorkflowUI.dragstart = null; // Stop dragging
+    blockedStep = this.getStep(blockedStep);
+    blockedByStep = this.getStep(blockedByStep);
+    var msg = "";
+    if (blockedStep == undefined && this.activeStep == null) {
+        msg = "No step to act on provided";
+    } else if (blockedStep.id == blockedByStep.id) {
+        msg = "Cant block yourself.";
+    } else {
+        if (blockedByStep == undefined) {
+            // Assume we are adding a block to the "active" step
+            blockedByStep = blockedStep;
+            blockedStep = this.activeStep;
+        }
+        if (blockedStep.dependsOn.includes(blockedByStep.id)) {
+            msg = "Already set";
+        } else if (blockedStep.dependedOnBy.includes(blockedByStep.id)) {
+            msg = "Cant block and be blocked by the same step";
+        } else {
+            blockedStep.dependsOn.push(blockedByStep.id);
+            blockedByStep.dependedOnBy.push(blockedStep.id);
+            WorkflowUI.drawConnector(blockedByStep, blockedStep);
+        }
+    }
+    // Let user respond
+    var rslt = {error:msg, blockedStep:blockedStep, blockedByStep:blockedByStep};
+    this.event.onBlockedByAdded(rslt);
+    //this.highlightStep(blockedStep, true);
+    return rslt;
 }
 Workflow.prototype.setDependsLinks = function() {
     for (var i = 0; i < arguments.length; i+=2) {
@@ -88,4 +125,16 @@ Workflow.prototype.canComplete = function(step, setAsComplete) {
 Workflow.prototype.toggleComplete = function(step, comment) {
     var thisStep = this.getStep(step);
     return this.setComplete(thisStep, comment, !thisStep.completed);
+}
+Workflow.prototype.highlightStep = function(step, highlight) {
+    WorkflowUI.highlightStep(WorkflowUI.canvas, step, highlight);
+}
+Workflow.prototype.move = function(step, dir, num) {
+    if (dir == "H") {
+        step.location.col += num;
+        if (step.location.col < 0) step.location.col = 0;
+    } else {
+        step.location.row += num;
+        if (step.location.row < 0) step.location.row = 0;
+    }
 }

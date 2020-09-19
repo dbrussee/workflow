@@ -1,7 +1,7 @@
 window.WorkflowUI = {
     pickedSpot: null,
     pickAction: null,
-    arrowSize: {length:10, width:5},
+    arrowSize: {length:10, width:6},
     connectorLineCenterOffset: 24,
     pickedStep: null,
     masterFlow: null,
@@ -58,44 +58,44 @@ WorkflowUI.drawCanvas = function(workflow, div, callback) {
             if (WorkflowUI.pickedStep == null) return;
             var moveX = event.clientX - WorkflowUI.dragstart.x;
             var moveY = event.clientY - WorkflowUI.dragstart.y;
+            var moved = false;
             if (moveX > (WorkflowUI.stepImageWidth + WorkflowUI.stepImageColumnGutter)) {
                 var pre = WorkflowUI.pickedStep.location.col;
-                WorkflowUI.move(WorkflowUI.pickedStep, "H", 1);
+                WorkflowUI.masterFlow.move(WorkflowUI.pickedStep, "H", 1);
                 if (WorkflowUI.pickedStep.location.col != pre) {
                     //debug("Moving step " + WorkflowUI.pickedStep.title + " right");
                     WorkflowUI.dragstart.x = event.clientX;
-                    WorkflowUI.drawCanvas();
+                    moved = true;
                 }
             }
             if (moveX < ((WorkflowUI.stepImageWidth + WorkflowUI.stepImageColumnGutter) * -1)) {
                 var pre = WorkflowUI.pickedStep.location.col;
-                WorkflowUI.move(WorkflowUI.pickedStep, "H", -1);
+                WorkflowUI.masterFlow.move(WorkflowUI.pickedStep, "H", -1);
                 if (WorkflowUI.pickedStep.location.col != pre) {
                     //debug("Moving step " + WorkflowUI.pickedStep.title + " left");
                     WorkflowUI.dragstart.x = event.clientX;
-                    WorkflowUI.drawCanvas();
+                    moved = true;
                 }
             }
             if (moveY > WorkflowUI.stepImageWidth + 20) {
                 var pre = WorkflowUI.pickedStep.location.row;
-                WorkflowUI.move(WorkflowUI.pickedStep, "V", 1);
+                WorkflowUI.masterFlow.move(WorkflowUI.pickedStep, "V", 1);
                 if (WorkflowUI.pickedStep.location.row != pre) {
                     //debug("Moving step " + WorkflowUI.pickedStep.title + " down");
                     WorkflowUI.dragstart.y = event.clientY;
-                    WorkflowUI.drawCanvas();
+                    moved = true;
                 }
             }
             if (moveY < ((WorkflowUI.stepImageWidth + 20) * -1)) {
                 var pre = WorkflowUI.pickedStep.location.row;
-                WorkflowUI.move(WorkflowUI.pickedStep, "V", -1);
+                WorkflowUI.masterFlow.move(WorkflowUI.pickedStep, "V", -1);
                 if (WorkflowUI.pickedStep.location.row != pre) {
                     //debug("Moving step " + WorkflowUI.pickedStep.title + " down");
                     WorkflowUI.dragstart.y = event.clientY;
-                    WorkflowUI.drawCanvas();
+                    moved = true;
                 }
             }
-           
-
+            if (moved) WorkflowUI.drawCanvas();
         });
     
         can.width = 1200;
@@ -115,12 +115,10 @@ WorkflowUI.drawCanvas = function(workflow, div, callback) {
     for (var id in workflow.flow.steps) {
         var step = workflow.flow.steps[id];
         WorkflowUI.drawStep(WorkflowUI.canvas, step);
-        WorkflowUI.drawConnectors(WorkflowUI.canvas, step, true);
-        if (WorkflowUI.pickedStep != null) {
-            if (step.id == WorkflowUI.pickedStep.id) {
-                WorkflowUI.highlightStep(WorkflowUI.canvas, step, true);
-            }
-        }
+        WorkflowUI.drawConnectors(step);
+    }
+    if (WorkflowUI.pickedStep != null) {
+        WorkflowUI.highlightStep(WorkflowUI.canvas, WorkflowUI.pickedStep, true);
     }
 }
 
@@ -213,37 +211,28 @@ WorkflowUI.drawStep = function(can, step, highlight) {
     ctx.fillText(step.resolve_list.length == 0 ? chrCheck : step.resolve_list.length, x-1, y + w - w/3 - 4);
     ctx.restore();
 }
-WorkflowUI.drawConnectors = function(can, step, withDependedOnBy) {
-    if (withDependedOnBy == undefined) withDependedOnBy = false;
-    var wf = WorkflowUI.masterFlow;
-    var w = WorkflowUI.stepImageWidth;
-    var gut = WorkflowUI.stepImageColumnGutter;
-    var ctx = can.getContext("2d");
-    var xy1 = WorkflowUI.getXY(step);
+
+
+WorkflowUI.drawConnectors = function(step) {
     for (var i = 0; i < step.dependsOn.length; i++) {
-        var step2 = wf.getStep(step.dependsOn[i]);
-        var xy2 = WorkflowUI.getXY(step2);
-        var x1 = xy1.x + WorkflowUI.stepImageWidth / 2;
-        var y1 = xy1.y + WorkflowUI.stepImageWidth / 2;
-        var x2 = xy2.x + WorkflowUI.stepImageWidth / 2;
-        var y2 = xy2.y + WorkflowUI.stepImageWidth / 2;
-        WorkflowUI.drawLine(x1, y1, x2, y2, 1, "grey");
-        WorkflowUI.drawArrowAtEnd(x1, y1, x2, y2, step2.completed ? "#228B22" : "#FF2000");
+        WorkflowUI.drawConnector(WorkflowUI.masterFlow.getStep(step.dependsOn[i]), step);
     }
     for (var i = 0; i < step.dependedOnBy.length; i++) {
-        var step2 = wf.getStep(step.dependedOnBy[i]);
-        var xy2 = WorkflowUI.getXY(step2);
-        var x1 = xy1.x + WorkflowUI.stepImageWidth / 2;
-        var y1 = xy1.y + WorkflowUI.stepImageWidth / 2;
-        var x2 = xy2.x + WorkflowUI.stepImageWidth / 2;
-        var y2 = xy2.y + WorkflowUI.stepImageWidth / 2;
-        WorkflowUI.drawLine(x1, y1, x2, y2, 1, "grey");
-        WorkflowUI.drawArrowAtEnd(x2, y2, x1, y1, step2.completed ? "#228B22" : "#FF2000");
+        WorkflowUI.drawConnector(step, WorkflowUI.masterFlow.getStep(step.dependedOnBy[i]));
     }
 }
-WorkflowUI.drawLine = function(x1, y1, x2, y2, thick, clr) {
-    if (thick == undefined || thick == null) thick = 1;
-    if (clr == undefined) clr = "black";
+WorkflowUI.drawConnector = function(stepA, stepB) {
+    var xyA = WorkflowUI.centerOfStep(stepA);
+    var xyB = WorkflowUI.centerOfStep(stepB);
+    WorkflowUI.drawLineWithArrow(xyA.x, xyA.y, xyB.x, xyB.y, 1, "black", stepA.completed ? "green":"red");
+}
+WorkflowUI.centerOfStep = function(step) {
+    var xy = WorkflowUI.getXY(step);
+    xy.x += (WorkflowUI.stepImageWidth / 2);
+    xy.y += (WorkflowUI.stepImageWidth / 2);
+    return xy;
+}
+WorkflowUI.drawLineWithArrow = function(x1, y1, x2, y2, thick, clr, arrowColor) {
     var ctx = WorkflowUI.canvas.getContext("2d");
     var len = WorkflowUI.lineLength(x1, y1, x2, y2);
     var mx = x1 - x2;
@@ -259,10 +248,25 @@ WorkflowUI.drawLine = function(x1, y1, x2, y2, thick, clr) {
     ctx.lineWidth = thick;
     ctx.stroke();
     ctx.restore();
+    // Start the arrow
+    ctx.save();
+    ctx.beginPath();
+    ctx.translate(x2,y2);
+    ctx.rotate(angle);
+    ctx.moveTo(WorkflowUI.connectorLineCenterOffset+3, 0);
+    ctx.lineTo(WorkflowUI.connectorLineCenterOffset+3 + WorkflowUI.arrowSize.length, WorkflowUI.arrowSize.width/2);
+    ctx.lineTo(WorkflowUI.connectorLineCenterOffset+3 + WorkflowUI.arrowSize.length, -WorkflowUI.arrowSize.width/2);
+    ctx.closePath();
+    ctx.strokeStyle = arrowColor;
+    ctx.lineWidth = 2;
+    ctx.stroke();
+    ctx.fillStyle = "white";
+    ctx.fill();
+    ctx.restore();
 }
 WorkflowUI.highlightStep = function(can, step, showHighlight) {
     WorkflowUI.drawStep(can, step, showHighlight);
-    WorkflowUI.drawConnectors(can, step, true);
+    WorkflowUI.drawConnectors(step, true);
 }
 WorkflowUI.rowColForXY = function(x, y) {
     var col = parseInt(x / (WorkflowUI.stepImageWidth + WorkflowUI.stepImageColumnGutter));
@@ -305,15 +309,6 @@ WorkflowUI.stepUnderXY = function(wf, x, y) {
     }
     return rslt;
 }
-WorkflowUI.move = function(step, dir, num) {
-    if (dir == "H") {
-        step.location.col += num;
-        if (step.location.col < 0) step.location.col = 0;
-    } else {
-        step.location.row += num;
-        if (step.location.row < 0) step.location.row = 0;
-    }
-}
 WorkflowUI.drawArrowAtEnd = function(x1, y1, x2, y2, color) {
     var length = WorkflowUI.arrowSize.length;
     var width = WorkflowUI.arrowSize.width;
@@ -342,13 +337,4 @@ WorkflowUI.lineLength = function(x1, y1, x2, y2) {
     var c = Math.sqrt( a*a + b*b )
     return c;
 }
-function debug(txt, clr) {
-    if (txt == undefined || txt == null) txt = "";
-    var div = document.getElementById("locDebug");
-    if (div != undefined) {
-        div.innerHTML = "";
-        if (clr == undefined) clr = "black";
-        div.innerHTML = txt;
-        div.style.color = clr;
-    }
-}
+
