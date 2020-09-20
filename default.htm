@@ -295,45 +295,6 @@
             page.editStep();
             
         });
-
-        /*
-        , function(event) {
-            var can = WorkflowUI.canvas;
-            if (WorkflowUI.pickedStep != null) WorkflowUI.highlightStep(can, WorkflowUI.pickedStep, false);
-            var x = event.offsetX;
-            var y = event.offsetY; 
-            if (WorkflowUI.pickedSpot != null) {
-                WorkflowUI.clearPickedSpot();
-            }
-            WorkflowUI.pickedSpot = WorkflowUI.rowColForXY(x, y);
-            var step = WorkflowUI.stepUnderXY(page.wflow, x, y);
-            //console.log("Click: pickAction = " + WorkflowUI.pickAction);
-            if (step != null) {
-                document.getElementById("locCreateButton").style.display = "none";
-                WorkflowUI.pickedSpot = null;
-                if (WorkflowUI.pickAction == null) {
-                    WorkflowUI.pickedStep = step;
-                    page.editStep(step);
-                    WorkflowUI.highlightStep(can, step, true);
-                } else if (WorkflowUI.pickAction == "addBlock") {
-                    page.addBlockStep(null, step);
-                } else if (WorkflowUI.pickAction == "addBlockedBy") {
-                    page.addBlockedByStep(null, step);
-                }
-            } else {
-                debug("");
-                WorkflowUI.pickAction = null; // Reset any pending actions
-                if (WorkflowUI.pickAction != null) {
-                    WorkflowUI.pickAction = null;
-                    page.editStep(WorkflowUI.pickedStep);
-                }
-                WorkflowUI.pickedStep = null;
-                document.getElementById("frmStep").style.display = "none";
-                document.getElementById("locCreateButton").style.display = "inline-block";
-                WorkflowUI.markPickedSpot();
-            }
-        });
-        */
     }
     page.editComment = function() {
         var step = WorkflowUI.pickedStep;
