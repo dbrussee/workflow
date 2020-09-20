@@ -6,10 +6,18 @@ var Workflow = function(name) {
         name: name,
         steps: {}
     }
-    this.event = {
-        onStepDeleted: function(data) { },
-        onBlockedByAdded: function(data) { }
+    var eventTarget = document.createTextNode(null); // Dummy target for events
+    // Pass EventTarget interface calls to DOM EventTarget object
+    this.addEventListener = eventTarget.addEventListener.bind(eventTarget);
+    this.removeEventListener = eventTarget.removeEventListener.bind(eventTarget);
+    this.dispatchEvent = function(enam, detail) {
+        eventTarget.dispatchEvent(new CustomEvent(enam, {detail:detail}));
     }
+
+    this.addEventListener("linkadded", function(e) {
+        WorkflowUI.drawConnector(e.detail.blockedByStep, e.detail.blockedStep);
+    })
+
     return this;
 }
 var WorkflowStep = function(workflow, title, desc) {
@@ -36,7 +44,17 @@ Workflow.prototype.addStep = function(title, desc) {
     this.flow.stepsList.push(step.id);
     return step;
 }
-Workflow.prototype.setBlockedBy = function(blockedStep, blockedByStep) {
+Workflow.prototype.setBlock = function(blockedStep, blockedByStep) {
+    var rslt = this.setStepLink(blockedStep, blockedByStep);
+    if (rslt.error == "") this.dispatchEvent("blockadded", rslt);
+    return rslt;
+}
+Workflow.prototype.setBlockedBy = function(blockingStep, blockedStep) {
+    var rslt = this.setStepLink(blockedStep, blockingStep);
+    if (rslt.error == "") this.dispatchEvent("blockbyadded", rslt);
+    return rslt;
+}
+Workflow.prototype.setStepLink = function(blockedStep, blockedByStep) {
     WorkflowUI.dragstart = null; // Stop dragging
     blockedStep = this.getStep(blockedStep);
     blockedByStep = this.getStep(blockedByStep);
@@ -58,13 +76,11 @@ Workflow.prototype.setBlockedBy = function(blockedStep, blockedByStep) {
         } else {
             blockedStep.dependsOn.push(blockedByStep.id);
             blockedByStep.dependedOnBy.push(blockedStep.id);
-            WorkflowUI.drawConnector(blockedByStep, blockedStep);
+            this.dispatchEvent("linkadded", {blockedStep:blockedStep, blockedByStep:blockedByStep});
         }
     }
     // Let user respond
     var rslt = {error:msg, blockedStep:blockedStep, blockedByStep:blockedByStep};
-    this.event.onBlockedByAdded(rslt);
-    //this.highlightStep(blockedStep, true);
     return rslt;
 }
 Workflow.prototype.setDependsLinks = function() {
@@ -137,4 +153,51 @@ Workflow.prototype.move = function(step, dir, num) {
         step.location.row += num;
         if (step.location.row < 0) step.location.row = 0;
     }
+}
+Workflow.prototype.createStep = function(row, col) {
+    if (row == undefined) { // Used pick location instead
+        row = WorkflowUI.pickedSpot.row;
+        col = WorkflowUI.pickedSpot.col;
+    }
+    var nextNum = 0;
+    while (this.flow.steps.hasOwnProperty("S" + nextNum)) {nextNum++}
+    var obj = {
+        id: nextNum,
+        title: 'New Step #' + nextNum,
+        desc: 'New Step #' + nextNum,
+        location: {col:col, row:row},
+        result:null, completed:false, dependsOn:[], dependedOnBy:[],
+        comment:'', resolve_list:[]
+    }
+    this.flow.steps["S" + nextNum] = obj;
+    WorkflowUI.drawCanvas(page.wflow);
+    WorkflowUI.highlightStep(WorkflowUI.canvas, obj, true);
+    WorkflowUI.pickedStep = obj;
+    WorkflowUI.masterFlow.dispatchEvent("steppicked", {step:obj});
+}
+Workflow.prototype.deleteStep = function(step) {
+    if (step == undefined) step = WorkflowUI.pickedStep;
+    if (step == null) return;
+    for (var i = 0; i < step.dependsOn.length; i++) {
+        var other = page.wflow.getStep(step.dependsOn[i]);
+        for (var j = 0; j < other.dependedOnBy.length; j++) {
+            if (other.dependedOnBy[j] == step.id) {
+                other.dependedOnBy.splice(j--,1); // Remove that item
+                break;
+            }
+        }
+    }
+    for (var i = 0; i < step.dependedOnBy.length; i++) {
+        var other = page.wflow.getStep(step.dependedOnBy[i]);
+        for (var j = 0; j < other.dependsOn.length; j++) {
+            if (other.dependsOn[j] == step.id) {
+                other.dependsOn.splice(j--,1); // Remove that item
+                break;
+            }
+        }
+    }
+    delete this.flow.steps["S" + step.id];
+    if (WorkflowUI.pickedStep.id == step.id) WorkflowUI.pickedStep = null;
+    WorkflowUI.drawCanvas();
+    this.dispatchEvent("stepdeleted", {id:step.id});
 }

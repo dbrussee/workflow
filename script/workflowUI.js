@@ -17,96 +17,131 @@ window.WorkflowUI = {
     dragstart: null
 }
 
-WorkflowUI.drawCanvas = function(workflow, div, callback) {
-    if (div != undefined) {
-        WorkflowUI.masterFlow = workflow;
-        WorkflowUI.drawCanvasLocation = div;
-        div.innerHTML = "";
-        var can = document.createElement("canvas");
+WorkflowUI.defineCanvas = function(workflow, div, callback) {
+    WorkflowUI.masterFlow = workflow;
+    WorkflowUI.drawCanvasLocation = div;
+    div.innerHTML = "";
+    var can = document.createElement("canvas");
 
-        // Sharpen up the resolution
-        //get DPI
-        var dpi = window.devicePixelRatio;
-        var style_height = getComputedStyle(can).getPropertyValue("height").slice(0, -2);
-        //get CSS width
-        let style_width = getComputedStyle(can).getPropertyValue("width").slice(0, -2);
-        //scale the canvas
-        can.setAttribute('height', style_height * dpi);
-        can.setAttribute('width', style_width * dpi);
+    // Sharpen up the resolution
+    //get DPI
+    var dpi = window.devicePixelRatio;
+    var style_height = getComputedStyle(can).getPropertyValue("height").slice(0, -2);
+    //get CSS width
+    let style_width = getComputedStyle(can).getPropertyValue("width").slice(0, -2);
+    //scale the canvas
+    can.setAttribute('height', style_height * dpi);
+    can.setAttribute('width', style_width * dpi);
 
 
-        WorkflowUI.canvas = can;
-        can.onmousedown = callback;
-    
-        can.addEventListener("mousedown", function(event) {
-            WorkflowUI.dragstart = {x:event.clientX, y:event.clientY};
-            WorkflowUI.canvas.style.cursor = "grabbing";
-            //debug("mousedown at " + event.clientX + ", " + event.clientY);
-        });
-        can.addEventListener("mouseup", function(event) {
-            WorkflowUI.dragstart = null;
-            WorkflowUI.canvas.style.cursor = "default";
-            var msg = "mouseup at " + event.clientX + ", " + event.clientY;
-            //debug(msg);
-        });
-        can.addEventListener("mouseout", function(event) {
-            WorkflowUI.dragstart = null;
-            WorkflowUI.canvas.style.cursor = "default";
-        });
-        can.addEventListener("mousemove", function(event) {
-            if (WorkflowUI.dragstart == null) return;
-            if (WorkflowUI.pickedStep == null) return;
-            var moveX = event.clientX - WorkflowUI.dragstart.x;
-            var moveY = event.clientY - WorkflowUI.dragstart.y;
-            var moved = false;
-            if (moveX > (WorkflowUI.stepImageWidth + WorkflowUI.stepImageColumnGutter)) {
-                var pre = WorkflowUI.pickedStep.location.col;
-                WorkflowUI.masterFlow.move(WorkflowUI.pickedStep, "H", 1);
-                if (WorkflowUI.pickedStep.location.col != pre) {
-                    //debug("Moving step " + WorkflowUI.pickedStep.title + " right");
-                    WorkflowUI.dragstart.x = event.clientX;
-                    moved = true;
-                }
+    WorkflowUI.canvas = can;
+    can.onmousedown = callback;
+
+    can.addEventListener("mousedown", function(event) {
+        WorkflowUI.dragstart = {x:event.clientX, y:event.clientY};
+        WorkflowUI.canvas.style.cursor = "grabbing";
+
+        var can = WorkflowUI.canvas;
+        if (WorkflowUI.pickedStep != null) WorkflowUI.highlightStep(can, WorkflowUI.pickedStep, false);
+        var x = event.offsetX;
+        var y = event.offsetY; 
+        if (WorkflowUI.pickedSpot != null) {
+            WorkflowUI.clearPickedSpot();
+        }
+        WorkflowUI.pickedSpot = WorkflowUI.rowColForXY(x, y);
+        var step = WorkflowUI.stepUnderXY(page.wflow, x, y);
+        if (step != null) {
+            WorkflowUI.pickedSpot = null;
+            if (WorkflowUI.pickAction == null) {
+                WorkflowUI.pickedStep = step;
+                WorkflowUI.highlightStep(can, step, true);
+                WorkflowUI.masterFlow.dispatchEvent("steppicked", {step:step});
+            } else {
+                WorkflowUI.masterFlow.dispatchEvent("actioncompleted", {source:WorkflowUI.pickedStep, step:step, action:WorkflowUI.pickAction});
+                WorkflowUI.pickAction = null;
             }
-            if (moveX < ((WorkflowUI.stepImageWidth + WorkflowUI.stepImageColumnGutter) * -1)) {
-                var pre = WorkflowUI.pickedStep.location.col;
-                WorkflowUI.masterFlow.move(WorkflowUI.pickedStep, "H", -1);
-                if (WorkflowUI.pickedStep.location.col != pre) {
-                    //debug("Moving step " + WorkflowUI.pickedStep.title + " left");
-                    WorkflowUI.dragstart.x = event.clientX;
-                    moved = true;
-                }
+        } else {
+            WorkflowUI.pickAction = null; // Reset any pending actions
+            if (WorkflowUI.pickAction != null) {
+                WorkflowUI.pickAction = null;
+                WorkflowUI.masterFlow.dispatchEvent("actionaborted", {action:WorkflowUI.pickAction});
             }
-            if (moveY > WorkflowUI.stepImageWidth + 20) {
-                var pre = WorkflowUI.pickedStep.location.row;
-                WorkflowUI.masterFlow.move(WorkflowUI.pickedStep, "V", 1);
-                if (WorkflowUI.pickedStep.location.row != pre) {
-                    //debug("Moving step " + WorkflowUI.pickedStep.title + " down");
-                    WorkflowUI.dragstart.y = event.clientY;
-                    moved = true;
-                }
+            WorkflowUI.pickedStep = null;
+            WorkflowUI.markPickedSpot();
+            WorkflowUI.masterFlow.dispatchEvent("emptyspotpicked", {spot:WorkflowUI.pickedSpot});
+        }
+
+        
+    });
+    can.addEventListener("mouseup", function(event) {
+        WorkflowUI.dragstart = null;
+        WorkflowUI.canvas.style.cursor = "default";
+        var msg = "mouseup at " + event.clientX + ", " + event.clientY;
+        //debug(msg);
+    });
+    can.addEventListener("mouseout", function(event) {
+        WorkflowUI.dragstart = null;
+        WorkflowUI.canvas.style.cursor = "default";
+    });
+    can.addEventListener("mousemove", function(event) {
+        if (WorkflowUI.dragstart == null) return;
+        if (WorkflowUI.pickedStep == null) return;
+        var moveX = event.clientX - WorkflowUI.dragstart.x;
+        var moveY = event.clientY - WorkflowUI.dragstart.y;
+        var moved = false;
+        if (moveX > (WorkflowUI.stepImageWidth + WorkflowUI.stepImageColumnGutter)) {
+            var pre = WorkflowUI.pickedStep.location.col;
+            WorkflowUI.masterFlow.move(WorkflowUI.pickedStep, "H", 1);
+            if (WorkflowUI.pickedStep.location.col != pre) {
+                //debug("Moving step " + WorkflowUI.pickedStep.title + " right");
+                WorkflowUI.dragstart.x = event.clientX;
+                moved = true;
             }
-            if (moveY < ((WorkflowUI.stepImageWidth + 20) * -1)) {
-                var pre = WorkflowUI.pickedStep.location.row;
-                WorkflowUI.masterFlow.move(WorkflowUI.pickedStep, "V", -1);
-                if (WorkflowUI.pickedStep.location.row != pre) {
-                    //debug("Moving step " + WorkflowUI.pickedStep.title + " down");
-                    WorkflowUI.dragstart.y = event.clientY;
-                    moved = true;
-                }
+        }
+        if (moveX < ((WorkflowUI.stepImageWidth + WorkflowUI.stepImageColumnGutter) * -1)) {
+            var pre = WorkflowUI.pickedStep.location.col;
+            WorkflowUI.masterFlow.move(WorkflowUI.pickedStep, "H", -1);
+            if (WorkflowUI.pickedStep.location.col != pre) {
+                //debug("Moving step " + WorkflowUI.pickedStep.title + " left");
+                WorkflowUI.dragstart.x = event.clientX;
+                moved = true;
             }
-            if (moved) WorkflowUI.drawCanvas();
-        });
-    
-        can.width = 1200;
-        can.height = 1200;
-        can.style.border = "1px dotted navy";
-        div.appendChild(can);
-    } else {
-        workflow = WorkflowUI.masterFlow;
-        var ctx = WorkflowUI.canvas.getContext("2d");
-        ctx.clearRect(0,0,WorkflowUI.canvas.width, WorkflowUI.canvas.height);
-    }
+        }
+        if (moveY > WorkflowUI.stepImageWidth + 20) {
+            var pre = WorkflowUI.pickedStep.location.row;
+            WorkflowUI.masterFlow.move(WorkflowUI.pickedStep, "V", 1);
+            if (WorkflowUI.pickedStep.location.row != pre) {
+                //debug("Moving step " + WorkflowUI.pickedStep.title + " down");
+                WorkflowUI.dragstart.y = event.clientY;
+                moved = true;
+            }
+        }
+        if (moveY < ((WorkflowUI.stepImageWidth + 20) * -1)) {
+            var pre = WorkflowUI.pickedStep.location.row;
+            WorkflowUI.masterFlow.move(WorkflowUI.pickedStep, "V", -1);
+            if (WorkflowUI.pickedStep.location.row != pre) {
+                //debug("Moving step " + WorkflowUI.pickedStep.title + " down");
+                WorkflowUI.dragstart.y = event.clientY;
+                moved = true;
+            }
+        }
+        if (moved) {
+            WorkflowUI.drawCanvas();
+            WorkflowUI.highlightStep(WorkflowUI.canvas, WorkflowUI.pickedStep, true);
+        }
+    });
+
+    can.width = 1200;
+    can.height = 1200;
+    can.style.border = "1px dotted navy";
+    div.appendChild(can);
+    WorkflowUI.drawCanvas();
+}
+
+WorkflowUI.drawCanvas = function() {
+    workflow = WorkflowUI.masterFlow;
+    var ctx = WorkflowUI.canvas.getContext("2d");
+    ctx.clearRect(0,0,WorkflowUI.canvas.width, WorkflowUI.canvas.height);
     // Clear out existing coordinates
     for (var id in workflow.flow.steps) {
         var step = workflow.flow.steps[id];
@@ -116,9 +151,6 @@ WorkflowUI.drawCanvas = function(workflow, div, callback) {
         var step = workflow.flow.steps[id];
         WorkflowUI.drawStep(WorkflowUI.canvas, step);
         WorkflowUI.drawConnectors(step);
-    }
-    if (WorkflowUI.pickedStep != null) {
-        WorkflowUI.highlightStep(WorkflowUI.canvas, WorkflowUI.pickedStep, true);
     }
 }
 
@@ -266,7 +298,7 @@ WorkflowUI.drawLineWithArrow = function(x1, y1, x2, y2, thick, clr, arrowColor) 
 }
 WorkflowUI.highlightStep = function(can, step, showHighlight) {
     WorkflowUI.drawStep(can, step, showHighlight);
-    WorkflowUI.drawConnectors(step, true);
+    WorkflowUI.drawConnectors(step);
 }
 WorkflowUI.rowColForXY = function(x, y) {
     var col = parseInt(x / (WorkflowUI.stepImageWidth + WorkflowUI.stepImageColumnGutter));
