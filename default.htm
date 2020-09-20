@@ -292,10 +292,7 @@
             document.getElementById("locCreateButton").style.display = "block";
         });
         page.wflow.addEventListener("stepdeleted", function(e) {
-            if (e.detail.id == WorkflowUI.pickedStep.id) {
-                document.getElementById("frmStep").style.display = "none";
-                document.getElementById("locCreateButton").style.display = "none";
-            }
+            page.editStep();
             
         });
 
