@@ -1,0 +1,11 @@
+{
+    "name":"Test",
+    "steps":{
+        "S0":{"id":0,"title":"Zero","desc":"My first step","location":{"col":0,"row":1},"result":null,"completed":false,"dependsOn":[],"dependedOnBy":[1,2],"comment":"Sample comment","resolve_list":[],"coords":null},
+        "S4":{"id":4,"title":"Four","desc":"First PLUS","location":{"col":0,"row":0},"result":null,"completed":false,"dependsOn":[],"dependedOnBy":[1],"comment":"","resolve_list":[],"coords":null},
+        "S1":{"id":1,"title":"One","desc":"Second step","location":{"col":1,"row":0},"result":null,"completed":false,"dependsOn":[0,4],"dependedOnBy":[],"comment":"","resolve_list":[],"coords":null},
+        "S2":{"id":2,"title":"Two","desc":"Third step","location":{"col":1,"row":1},"result":null,"completed":false,"dependsOn":[0,3],"dependedOnBy":[5],"comment":"","resolve_list":[],"coords":null},
+        "S3":{"id":3,"title":"Three","desc":"Fourth step. This one was added manually","location":{"col":0,"row":2},"result":null,"completed":false,"dependsOn":[],"dependedOnBy":[2],"comment":"","resolve_list":[{"code":"A","desc":"Option A"},{"code":"B","desc":"Option B which has been made artifically quite long so it will make the dropdown list need to be shortened a bit"}],"coords":null},
+        "S5":{"id":5,"title":"Five","desc":"Fifth and Final","location":{"col":2,"row":1},"result":null,"completed":false,"dependsOn":[2],"dependedOnBy":[],"comment":"","resolve_list":[{"code":"A","desc":"First Choice"},{"code":"B","desc":"Second Option"}],"coords":null}
+    }
+}
