@@ -15,6 +15,51 @@
     // Pre-Release version 0.01 - 9/16/2020 - dbrussee
     var page = {}
     page.wflow = null;
+    page.getFlow = function() {
+        var msg = "Paste in a saved workflow data set below:";
+        sayGet(msg, "Flow", "", "Load Workflow", function(rslt) {
+            if (rslt != null && rslt != "") {
+                page.replaceFlow(rslt);
+            }
+        }, true);
+    }
+    page.saveFlow = function() {
+        say("The string representation of the current workflow is now in your clipboard. Save its contents to a file to save it.");
+    }
+    page.loadFlow = function(flow, justload) {
+        if (justload == undefined) justload = false;
+        if (flow == undefined) flow = JSON.stringify(page.wflow.flow);
+        if (justload) {
+            page.replaceFlow(flow);
+        } else {
+            if (typeof flow == "object") flow = JSON.stringify(flow);
+            page.pendingFlow = flow;
+            var json = JSON.parse(flow);
+            var count = 0;
+            for (var key in json.steps) count++;
+            var msg = "Replace the current flow with a new one with " + count + " " + (count == 1 ? "step":"steps") + "?";
+            ask(msg, "JSON", function(rslt) {
+                if (rslt == "YES") page.replaceFlow(page.pendingFlow);
+            }, true);
+        }
+    }
+    page.replaceFlow = function(json) {
+        debug();
+        WorkflowUI.pickedStep = null;
+        WorkflowUI.pickedSpot = null;
+        document.getElementById("locCreateButton").style.display = "none";
+        page.editStep(false);
+        if (typeof json == "string") {
+            try {
+                json = JSON.parse(json);
+            } catch(e) {
+                say("Error Message: " + e, "Error");
+                return;
+            }
+        }
+        page.wflow.flow = json;
+        page.wflow.drawCanvas();
+    }
     page.saveStepInfo = function() {
         var frm = B.getForm("frmStep");
         var step = WorkflowUI.pickedStep;
@@ -31,21 +76,27 @@
                 step.result = data.step_resolution;
             }
         }
-        WorkflowUI.drawCanvas(page.wflow);
-        WorkflowUI.highlightStep(WorkflowUI.canvas, step, true);
+        page.wflow.drawCanvas(page.wflow);
+        page.wflow.highlightStep(step, true);
     }
     page.askToDeleteStep = function() {
-        debug();
-        var msg = "Are you sure you want to delete this step? You cannot undo this action.";
-        ask(msg, "Delete Step", function(rslt) {
-            if (rslt == "YES") page.wflow.deleteStep();
-        }).warning();
+        WorkflowUI.dragstart = null; // Stop dragging
+        WorkflowUI.pickAction = "addBlock";
+        var msg = "Confirm delete of step "  + WorkflowUI.pickedStep.title + ": ";
+        msg += "<button onclick='page.wflow.deleteStep()'>Delete Now</button> or "
+        msg += "<button onclick='page.editStep(true)'>Cancel</button>"
+        debug(msg);
+        //debug();
+        //var msg = "Are you sure you want to delete this step? You cannot undo this action.";
+        //ask(msg, "Delete Step", function(rslt) {
+        //    if (rslt == "YES") page.wflow.deleteStep();
+        //}).warning();
     }
     page.addBlockStep = function(spn, bstep) {
         if (spn != null) {
             WorkflowUI.dragstart = null; // Stop dragging
             WorkflowUI.pickAction = "addBlock";
-            debug("Click a step to add as a blocking step for this step...");
+            debug("Click a step to add as a blocking step for this step <button onclick='page.editStep(true)'>cancel</button>...");
         } else {
             debug("");
             WorkflowUI.pickAction = null;
@@ -62,7 +113,7 @@
         if (spn != null) {
             WorkflowUI.dragstart = null; // Stop dragging
             WorkflowUI.pickAction = "addBlockedBy";
-            debug("Click a step to add as a blocking step for this step...");
+            debug("Click a step to add as a blocking step for this step <button onclick='page.editStep(true)'>cancel</button>...");
         } else {
             debug("");
             var rslt = page.wflow.setBlockedBy(WorkflowUI.pickedStep, bstep);
@@ -74,40 +125,18 @@
         }
     }
     page.removeBlockedBy = function(spn, blockid) {
-        var step = WorkflowUI.pickedStep;
-        for (var i = 0; i < step.dependsOn.length; i++) {
-            if (step.dependsOn[i] == blockid) {
-                step.dependsOn.splice(i,1); // Remove that item
-                break;
-            }
-        }
-        var other = page.wflow.getStep(blockid);
-        for (var i = 0; i < other.dependedOnBy.length; i++) {
-            if (other.dependedOnBy[i] == step.id) {
-                other.dependedOnBy.splice(i,1); // Remove that item
-                break;
-            }
-        }
-        WorkflowUI.drawCanvas(page.wflow);
-        page.editStep(step);
+        var step = page.wflow.getStep(blockid);
+        var msg = "Confirm removal of link to " + step.title + ": ";
+        msg += " <button onclick='page.wflow.removeLink(\"" + blockid + "\")'>Remove</button> or ";
+        msg += " <button onclick='page.editStep(true)'>Cancel</button>";
+        debug(msg);
     }
     page.removeBlock = function(spn, blockid) {
-        var step = WorkflowUI.pickedStep;
-        for (var i = 0; i < step.dependedOnBy.length; i++) {
-            if (step.dependedOnBy[i] == blockid) {
-                step.dependedOnBy.splice(i,1); // Remove that item
-                break;
-            }
-        }
-        var other = page.wflow.getStep(blockid);
-        for (var i = 0; i < other.dependsOn.length; i++) {
-            if (other.dependsOn[i] == step.id) {
-                other.dependsOn.splice(i,1); // Remove that item
-                break;
-            }
-        }
-        WorkflowUI.drawCanvas(page.wflow);
-        page.editStep(step);
+        var step = page.wflow.getStep(blockid);
+        var msg = "Confirm removal of link to " + step.title + ": ";
+        msg += " <button onclick='page.wflow.removeLink(\"" + blockid + "\")'>Remove</button> or ";
+        msg += " <button onclick='page.editStep(true)'>Cancel</button>";
+        debug(msg);
     }
     page.toggleStep = function() {
         if (WorkflowUI.pickedStep == null) return;
@@ -258,7 +287,7 @@
             if (block) event.preventDefault();
         }
         page.wflow = new Workflow("Test");
-        page.wflow.flow = {
+/*        page.wflow.flow = {
             "name":"Test",
             "steps":{
                 "S0":{id:0,title:"Zero",desc:"My first step",location:{col:0,row:0},result:null,completed:false,dependsOn:[],dependedOnBy:[1,2],comment:"Sample comment",resolve_list:[]},
@@ -268,7 +297,7 @@
                 "S3":{id:3,title:"Three",desc:"Fourth step. This one was added manually",location:{col:0,row:2},result:null,completed:false,dependsOn:[],dependedOnBy:[2],comment:"", resolve_list:[{code:"A",desc:"Option A"},{code:"B",desc:"Option B which has been made artifically quite long so it will make the dropdown list need to be shortened a bit"}]},
                 "S5":{id:5,title:"Five",desc:"Fifth and Final",location:{col:2,row:1},result:null,completed:false,dependsOn:[2],dependedOnBy:[],comment:"", resolve_list:[{code:"A",desc:"First Choice"},{code:"B",desc:"Second Option"}]}
             }
-        }
+        } */
 
         WorkflowUI.defineCanvas(page.wflow, document.getElementById("locFlowDiagramCanvas"));
         page.wflow.addEventListener("steppicked", function(e) {
@@ -285,16 +314,24 @@
         });
         page.wflow.addEventListener("actionaborted", function(e) {
             document.getElementById("locCreateButton").style.display = "none";
-            page.editStep(WorkflowUI.pickedStep);
+            page.editStep(true);
         });
         page.wflow.addEventListener("emptyspotpicked", function(e) {
             document.getElementById("frmStep").style.display = "none";
             document.getElementById("locCreateButton").style.display = "block";
+            debug();
         });
         page.wflow.addEventListener("stepdeleted", function(e) {
-            page.editStep();
-            
+            page.editStep(false);
+            debug();
         });
+        page.wflow.addEventListener("linkremoved", function(e) {
+            page.editStep(true);
+            debug();
+        });
+
+        //page.wflow.readFlowFromTextFile("./flows/simple.flow");
+        page.readFlowFromTextFile("./flows/initial.flow", true);
     }
     page.editComment = function() {
         var step = WorkflowUI.pickedStep;
@@ -305,9 +342,15 @@
         }, true);
     }
     page.editStep = function(step) {
-        if (step == undefined) {
-            document.getElementById("frmStep").style.display = "none";
-            return;
+        WorkflowUI.pickAction = null;
+        if (step == undefined) step = false; // Turn it off
+        if (typeof step == "boolean") {
+            if (step) { // passed "true"... Reload currently picked step
+                step = WorkflowUI.pickedStep;
+            } else {
+                document.getElementById("frmStep").style.display = "none";
+                return;
+            }
         }
         document.getElementById("locCreateButton").style.display = "none";
         debug("");
@@ -406,7 +449,31 @@ function debug(txt, clr) {
         div.style.color = clr;
     }
 }
-
+page.readFlowFromTextFile = function (file, justload) {
+    var rawFile = new XMLHttpRequest();
+    page.justload = justload;
+    //rawFile.overrideMimeType("application/json");
+    rawFile.overrideMimeType("text/plain");
+    rawFile.open("GET", file, true);
+    rawFile.onreadystatechange = function() {
+        if (rawFile.readyState === 4 && rawFile.status == "200") {
+            page.loadFlow(JSON.parse(rawFile.responseText), page.justload);
+        }
+    }
+    rawFile.send(null);
+}
+page.copyToClipboard = function(txt) {
+    if (txt == undefined) txt = JSON.stringify(page.wflow.flow);
+    var tbox = document.createElement("input");
+    //tbox.style.display = "none";
+    document.body.appendChild(tbox);
+    tbox.value = txt;
+    tbox.focus();
+    tbox.select();
+    tbox.setSelectionRange(0,999999); // mobile needs this
+    document.execCommand("copy");
+    document.body.removeChild(tbox);
+}
 </script>
 </head>
 <body onload='page.init()'>
@@ -416,6 +483,12 @@ function debug(txt, clr) {
                 <div style='position:relative; width:610px; height: 400px; overflow:scroll;'>
                     <div id='locFlowDiagramCanvas'></div>
                 </div>
+                <button onclick='page.readFlowFromTextFile("./flows/initial.flow");'>New Flow</button>
+                <button onclick='page.readFlowFromTextFile("./flows/sample.flow");'>Sample</button>
+                <button onclick='page.getFlow()'>Load Flow</button>
+                <button onclick='page.copyToClipboard(); page.saveFlow()'>Save Flow</button>
+                <div style='padding-top: .5em;margin-top:.5em; border-top: 1px solid navy;' id='locDebug' style='color:brown'></div>
+            
             </td>
             <td id='locForm' style='vertical-align: top; text-align: left; width:calc(100vw - 650px)'>
                 <span style='display:none' id='locCreateButton'><button onclick='page.wflow.createStep()'>Create Step Here</button></span>
@@ -450,7 +523,5 @@ function debug(txt, clr) {
             </td>
         </tr>
     </table>
-    <div id='locDebug' style='color:brown'></div>
-    <div style='display:none;' id='locFlowDiagram'></div>    
 </body>
 </html>
