@@ -57,7 +57,8 @@ WorkflowUI.defineCanvas = function(workflow, div, callback) {
                 WorkflowUI.highlightStep(can, step, true);
                 WorkflowUI.masterFlow.dispatchEvent("steppicked", {step:step});
             } else {
-                WorkflowUI.masterFlow.dispatchEvent("actioncompleted", {source:WorkflowUI.pickedStep, step:step, action:WorkflowUI.pickAction});
+                var act = WorkflowUI.pickAction;
+                WorkflowUI.masterFlow.dispatchEvent("actioncompleted", {source:WorkflowUI.pickedStep, step:step, action:act});
                 WorkflowUI.pickAction = null;
             }
         } else {
