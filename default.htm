@@ -10,21 +10,63 @@
 <link rel="stylesheet" type="text/css" href="style/workflow.css">
 <script src='script/workflow.js'></script>
 <script src='script/workflowUI.js'></script>
+<script src='script/FileSaver.js'></script>
+<script src='script/BFile.js'></script>
 <link rel="stylesheet" type="text/css" href="style/general.css">
 <script>
     // Pre-Release version 0.01 - 9/16/2020 - dbrussee
     var page = {}
     page.wflow = null;
+    page.fileReader = null;
     page.getFlow = function() {
-        var msg = "Paste in a saved workflow data set below:";
-        sayGet(msg, "Flow", "", "Load Workflow", function(rslt) {
-            if (rslt != null && rslt != "") {
-                page.replaceFlow(rslt);
-            }
-        }, true);
+        //page.editStep(false);
+        var div = document.getElementById("locDebug");
+        div.innerHTML = "<button onclick='page.readFlowFromTextFile(\"./flows/initial.flow\");'>New Flow</button> ";
+        div.innerHTML += "<button onclick='page.readFlowFromTextFile(\"./flows/sample.flow\");'>Sample</button> ";
+        page.fileReader = new B.File(div, function() {
+            page.fileReader.getText(function(txt) {
+                page.replaceFlow(txt);
+            });
+        });
+        var btn = document.createElement("button");
+        btn.innerHTML = "Cancel";
+        btn.onclick = function() {page.clear();}
+        div.appendChild(btn);
+    }
+    page.clear = function() {
+        if (WorkflowUI.pickedSpot != null) {
+            WorkflowUI.clearPickedSpot();
+            WorkflowUI.pickedSpot = null;
+        }
+        document.getElementById("locCreateButton").style.display = "none";
+        WorkflowUI.dragstart = null; // Stop dragging
+        WorkflowUI.pickAction = null;
+        debug();
+        if (WorkflowUI.pickedStep == null) {
+            page.editStep(false);
+        } else {
+            page.editStep(true);
+        }
     }
     page.saveFlow = function() {
-        say("The string representation of the current workflow is now in your clipboard. Save its contents to a file to save it.");
+        var msg = "Save this flow as <input id='txtSaveFileName' value=\"" + page.wflow.flow.name + "\" style='color:blue;text-align:right'>.flow? ";
+        debug(msg);
+        var div = document.getElementById("locDebug");
+        var btn = document.createElement("button");
+        btn.innerHTML = "Save";
+        btn.onclick = function() {
+            var filename = document.getElementById("txtSaveFileName").value;
+            if (filename == "") filename = page.wflow.flow.name;
+            page.wflow.flow.name = filename;
+            var blob = new Blob([JSON.stringify(page.wflow.flow)], {type: "text/plain;charset=utf-8"});
+            saveAs(blob, filename + ".flow");
+            page.clear();
+        }
+        div.appendChild(btn);
+        btn = document.createElement("button");
+        btn.innerHTML = "Cancel";
+        btn.onclick = page.clear;
+        div.appendChild(btn);
     }
     page.loadFlow = function(flow, justload) {
         if (justload == undefined) justload = false;
@@ -261,28 +303,6 @@
             else if (event.keyCode == 40) page.pickStep(0, 1); // Down
             else if (event.keyCode == 37) page.pickStep(-1, 0); // Left
             else if (event.keyCode == 39) page.pickStep(1, 0); // Right
-            else if (event.keyCode == 89) page.completeStep(); // Yes
-            else if (event.keyCode == 78) page.incompleteStep(); // No
-            else if (event.keyCode == 32) page.toggleStep(); // Space
-            else if (event.keyCode == 48) page.incompleteStep(); // Zero
-            else if (event.keyCode == 49) page.completeStep("0"); // One
-            else if (event.keyCode == 50) page.completeStep("1"); // Two
-            else if (event.keyCode == 51) page.completeStep("2"); // Three
-            else if (event.keyCode == 52) page.completeStep("3"); // Four
-            else if (event.keyCode == 53) page.completeStep("4"); // Five
-            else if (event.keyCode == 54) page.completeStep("5"); // Siz
-            else if (event.keyCode == 55) page.completeStep("6"); // Seven
-            else if (event.keyCode == 56) page.completeStep("7"); // Eight
-            else if (event.keyCode == 57) page.completeStep("8"); // Nine
-            else if (event.keyCode == 65) page.completeStep("0"); // A
-            else if (event.keyCode == 66) page.completeStep("1"); // B
-            else if (event.keyCode == 67) page.completeStep("2"); // C
-            else if (event.keyCode == 68) page.completeStep("3"); // D
-            else if (event.keyCode == 69) page.completeStep("4"); // E
-            else if (event.keyCode == 70) page.completeStep("5"); // F
-            else if (event.keyCode == 71) page.completeStep("6"); // G
-            else if (event.keyCode == 72) page.completeStep("7"); // H
-            else if (event.keyCode == 73) page.completeStep("8"); // I
             else block = false;
             if (block) event.preventDefault();
         }
@@ -483,10 +503,8 @@ page.copyToClipboard = function(txt) {
                 <div style='position:relative; width:610px; height: 400px; overflow:scroll;'>
                     <div id='locFlowDiagramCanvas'></div>
                 </div>
-                <button onclick='page.readFlowFromTextFile("./flows/initial.flow");'>New Flow</button>
-                <button onclick='page.readFlowFromTextFile("./flows/sample.flow");'>Sample</button>
                 <button onclick='page.getFlow()'>Load Flow</button>
-                <button onclick='page.copyToClipboard(); page.saveFlow()'>Save Flow</button>
+                <button onclick='page.saveFlow()'>Save Flow</button>
                 <div style='padding-top: .5em;margin-top:.5em; border-top: 1px solid navy;' id='locDebug' style='color:brown'></div>
             
             </td>
