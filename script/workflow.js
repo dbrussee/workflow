@@ -24,16 +24,6 @@ var Workflow = function(name) {
     return this;
 }
 
-var WorkflowStep = function(workflow, title, desc) {
-    this.id = workflow.flow.stepsList.length;
-    this.title = title;
-    this.desc = desc;
-    this.completed = false;
-    this.comment = "";
-    this.dependsOn = []; // List of steps I depend on
-    this.dependedOnBy = []; // List of steps depending on me
-    return this;
-}
 Workflow.prototype.drawCanvas = function() {
     WorkflowUI.drawCanvas(this);
 }
@@ -44,12 +34,6 @@ Workflow.prototype.getStep = function(step) {
     } else {
         return this.flow.steps["S" + step];
     }
-}
-Workflow.prototype.addStep = function(title, desc) {
-    var step = new WorkflowStep(this, title, desc);
-    this.flow.steps[step.id] = step;
-    this.flow.stepsList.push(step.id);
-    return step;
 }
 Workflow.prototype.removeLink = function(stepA, stepB) {
     if (stepB == undefined) {
@@ -197,8 +181,8 @@ Workflow.prototype.createStep = function(row, col) {
     while (this.flow.steps.hasOwnProperty("S" + nextNum)) {nextNum++}
     var obj = {
         id: nextNum,
-        title: 'New Step #' + nextNum,
-        desc: 'New Step #' + nextNum,
+        title: 'New Step',
+        desc: 'New Step Description',
         location: {col:col, row:row},
         result:null, completed:false, dependsOn:[], dependedOnBy:[],
         comment:'', resolve_list:[]
