@@ -1,11 +1,13 @@
-var Workflow = function(name) {
-    this.drawLocation = null;
-    this.drawCallback = null;
+var Workflow = function(name, drawLocation) {
+    this.drawLocation = drawLocation;
     this.activeStep = null;
+    this.pickedStep = null;
+    this.flowProperties = [];
     this.flow = {
         name: name,
         steps: {}
     }
+    WorkflowUI.defineCanvas(this, drawLocation);//, callback
     var eventTarget = document.createTextNode(null); // Dummy target for events
     // Pass EventTarget interface calls to DOM EventTarget object
     this.addEventListener = eventTarget.addEventListener.bind(eventTarget);
@@ -15,6 +17,9 @@ var Workflow = function(name) {
         eventTarget.dispatchEvent(new CustomEvent(ename, {detail:detail}));
     }
 
+    this.addEventListener("steppicked", function(e) {
+        this.pickedStep = e.detail.step;
+    });
     this.addEventListener("linkadded", function(e) {
         WorkflowUI.drawConnector(e.detail.blockedByStep, e.detail.blockedStep);
     });
@@ -23,9 +28,26 @@ var Workflow = function(name) {
     });
     return this;
 }
-
+Workflow.prototype.collectProperties = function() {
+    this.properties = [];
+    for (var id in this.flow.steps) {
+        var step = this.flow.steps[id]; // id = S0, etc
+        var props = null;
+        if (step.properties == undefined) step.properties = [];
+        if (step.properties.length > 0) {
+            stepProps = {stepid:step.id, props:[]};
+            for (var i = 0; i < step.properties.length; i++) {
+                var prop = step.properties[i];
+                stepProps.props.push({key:prop.key, value:prop.value});
+            }
+            this.properties.push(stepProps);
+        }
+    }
+    this.dispatchEvent("properties", {properties:this.properties});
+}
 Workflow.prototype.drawCanvas = function() {
     WorkflowUI.drawCanvas(this);
+    this.collectProperties();
 }
 Workflow.prototype.getStep = function(step) {
     if (step == undefined) return;
@@ -38,7 +60,7 @@ Workflow.prototype.getStep = function(step) {
 Workflow.prototype.removeLink = function(stepA, stepB) {
     if (stepB == undefined) {
         stepA = this.getStep(stepA);
-        stepB = WorkflowUI.pickedStep;
+        stepB = page.wflow.flow.pickedStep;
     } else {
         stepA = this.getStep(stepA);
         stepB = this.getStep(stepB);
@@ -75,12 +97,12 @@ Workflow.prototype.removeLink = function(stepA, stepB) {
     if (linkFound) this.dispatchEvent("linkremoved", {stepA:stepA, stepB:stepB});
 }
 Workflow.prototype.setBlock = function(blockedStep, blockedByStep) {
-    var rslt = this.setStepLink(blockedStep, blockedByStep);
+    var rslt = this.setStepLink(blockedByStep, blockedStep);
     if (rslt.error == "") this.dispatchEvent("blockadded", rslt);
     return rslt;
 }
 Workflow.prototype.setBlockedBy = function(blockingStep, blockedStep) {
-    var rslt = this.setStepLink(blockedStep, blockingStep);
+    var rslt = this.setStepLink(blockingStep, blockedStep);
     if (rslt.error == "") this.dispatchEvent("blockbyadded", rslt);
     return rslt;
 }
@@ -161,6 +183,8 @@ Workflow.prototype.toggleComplete = function(step, comment) {
     return this.setComplete(thisStep, comment, !thisStep.completed);
 }
 Workflow.prototype.highlightStep = function(step, highlight) {
+    if (highlight == undefined) highlight = true;
+    if (step == undefined) step = this.flow.pickedStep;
     WorkflowUI.highlightStep(WorkflowUI.canvas, step, highlight);
 }
 Workflow.prototype.move = function(step, dir, num) {
@@ -182,19 +206,20 @@ Workflow.prototype.createStep = function(row, col) {
     var obj = {
         id: nextNum,
         title: 'New Step',
-        desc: 'New Step Description',
+        desc: '',
         location: {col:col, row:row},
         result:null, completed:false, dependsOn:[], dependedOnBy:[],
+        properties: [], // Collection of {key:'XX',value:''} pairs
         comment:'', resolve_list:[]
     }
     this.flow.steps["S" + nextNum] = obj;
     WorkflowUI.drawCanvas(this);
     WorkflowUI.highlightStep(WorkflowUI.canvas, obj, true);
-    WorkflowUI.pickedStep = obj;
+    page.wflow.flow.pickedStep = obj;
     WorkflowUI.masterFlow.dispatchEvent("steppicked", {step:obj});
 }
 Workflow.prototype.deleteStep = function(step) {
-    if (step == undefined) step = WorkflowUI.pickedStep;
+    if (step == undefined) step = page.wflow.flow.pickedStep;
     if (step == null) return;
     for (var i = 0; i < step.dependsOn.length; i++) {
         var other = this.getStep(step.dependsOn[i]);
@@ -215,7 +240,7 @@ Workflow.prototype.deleteStep = function(step) {
         }
     }
     delete this.flow.steps["S" + step.id];
-    if (WorkflowUI.pickedStep.id == step.id) WorkflowUI.pickedStep = null;
+    if (page.wflow.flow.pickedStep.id == step.id) page.wflow.flow.pickedStep = null;
     WorkflowUI.drawCanvas();
     this.dispatchEvent("stepdeleted", {id:step.id});
 }
