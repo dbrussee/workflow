@@ -5,13 +5,14 @@
             "id":0,
             "title":"First",
             "desc":"My first step",
-            "location":{"col":0,"row":0},
+            "location":{"col":0,"row":2},
             "result":null,
             "completed":false,
             "dependsOn":[],
             "dependedOnBy":[],
             "comment":"Sample comment",
-            "resolve_list":[],
-            "coords":null}
+            "properties":[{"key":"TEST","value":"sample value"}],
+            "resolve_list":[]
+        }
     }
 }
