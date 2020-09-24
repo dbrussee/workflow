@@ -18,6 +18,20 @@
     var page = {}
     page.wflow = null;
     page.fileReader = null;
+    page.toastTimer = null;
+    page.toast = function(msg) {
+        if (msg == undefined) msg = "";
+        var loc = document.getElementById("locToastMessage");
+        loc.innerHTML = msg;
+        if (page.toastTimer != null) window.clearTimeout(page.toastTimer);
+        if (msg == "") {
+            page.toastTimer = null;
+        } else {
+            page.toastTimer = window.setTimeout(function() {
+                page.toast();
+            }, 4000);
+        }
+    }
     page.getFlow = function() {
         //page.editStep(false);
         var div = document.getElementById("locDebug");
@@ -31,6 +45,7 @@
         var btn = document.createElement("button");
         btn.innerHTML = "Cancel";
         btn.onclick = function() {page.clear();}
+        btn.style.marginLeft = ".4em";
         div.appendChild(btn);
     }
     page.clear = function() {
@@ -38,15 +53,18 @@
             WorkflowUI.clearPickedSpot();
             WorkflowUI.pickedSpot = null;
         }
-        document.getElementById("locCreateButton").style.display = "none";
         WorkflowUI.dragstart = null; // Stop dragging
         WorkflowUI.pickAction = null;
         debug();
-        if (WorkflowUI.pickedStep == null) {
+        if (page.wflow.flow.pickedStep == null) {
             page.editStep(false);
         } else {
             page.editStep(true);
         }
+    }
+    page.saveLocal = function() {
+        localStorage.setItem("workflow", JSON.stringify(page.wflow.flow));
+        page.toast("Local copy saved");
     }
     page.saveFlow = function() {
         var msg = "Save this flow as <input id='txtSaveFileName' value=\"" + page.wflow.flow.name + "\" style='color:blue;text-align:right'>.flow? ";
@@ -61,6 +79,7 @@
             var blob = new Blob([JSON.stringify(page.wflow.flow)], {type: "text/plain;charset=utf-8"});
             saveAs(blob, filename + ".flow");
             page.clear();
+            page.saveLocal();
         }
         div.appendChild(btn);
         btn = document.createElement("button");
@@ -87,9 +106,8 @@
     }
     page.replaceFlow = function(json) {
         debug();
-        WorkflowUI.pickedStep = null;
+        page.wflow.flow.pickedStep = null;
         WorkflowUI.pickedSpot = null;
-        document.getElementById("locCreateButton").style.display = "none";
         page.editStep(false);
         if (typeof json == "string") {
             try {
@@ -101,10 +119,13 @@
         }
         page.wflow.flow = json;
         page.wflow.drawCanvas();
+        if (page.wflow.flow.pickedStep != null) {
+            page.pickStepId(page.wflow.flow.pickedStep.id);
+        }
     }
     page.saveStepInfo = function() {
         var frm = B.getForm("frmStep");
-        var step = WorkflowUI.pickedStep;
+        var step = page.wflow.flow.pickedStep;
         var data = frm.get();
         step.comment = data.step_comment;
         if (step.resolve_list.length == 0) {
@@ -124,7 +145,7 @@
     page.askToDeleteStep = function() {
         WorkflowUI.dragstart = null; // Stop dragging
         WorkflowUI.pickAction = "addBlock";
-        var msg = "Confirm delete of step "  + WorkflowUI.pickedStep.title + ": ";
+        var msg = "Confirm delete of step "  + page.wflow.flow.pickedStep.title + ": ";
         msg += "<button onclick='page.wflow.deleteStep()'>Delete Now</button> or "
         msg += "<button onclick='page.editStep(true)'>Cancel</button>"
         debug(msg);
@@ -134,35 +155,35 @@
         //    if (rslt == "YES") page.wflow.deleteStep();
         //}).warning();
     }
-    page.addBlockStep = function(spn, bstep) {
-        if (spn != null) {
+    page.addBlockStep = function(bstep) {
+        if (bstep == undefined) {
             WorkflowUI.dragstart = null; // Stop dragging
             WorkflowUI.pickAction = "addBlock";
-            debug("Click a step to add as a blocking step for this step <button onclick='page.editStep(true)'>cancel</button>...");
+            debug("Click a step to add as a blocking step for this step <button onclick='page.editStep(true)'>Cancel</button>...");
         } else {
             debug("");
             WorkflowUI.pickAction = null;
-            var rslt =  page.wflow.setBlock(WorkflowUI.pickedStep, bstep);
+            var rslt =  page.wflow.setBlock(page.wflow.flow.pickedStep, bstep);
             if (rslt.error != "") {
                 debug(rslt.error, "red");
             } else {
-                page.editStep(rslt.blockedStep);
+                page.editStep(page.wflow.flow.pickedStep);
             }
 
         }
     }
-    page.addBlockedByStep = function(spn, bstep) {
-        if (spn != null) {
+    page.addBlockedByStep = function(bstep) {
+        if (bstep == undefined) {
             WorkflowUI.dragstart = null; // Stop dragging
             WorkflowUI.pickAction = "addBlockedBy";
-            debug("Click a step to add as a blocking step for this step <button onclick='page.editStep(true)'>cancel</button>...");
+            debug("Click a step to add as a blocking step for this step <button onclick='page.editStep(true)'>Cancel</button>...");
         } else {
             debug("");
-            var rslt = page.wflow.setBlockedBy(WorkflowUI.pickedStep, bstep);
+            var rslt = page.wflow.setBlockedBy(page.wflow.flow.pickedStep, bstep);
             if (rslt.error != "") {
                 debug(rslt.error, "red");
             } else {
-                page.editStep(rslt.blockedByStep);
+                page.editStep(page.wflow.flow.pickedStep);
             }
         }
     }
@@ -180,20 +201,27 @@
         msg += " <button onclick='page.editStep(true)'>Cancel</button>";
         debug(msg);
     }
-    page.toggleStep = function() {
-        if (WorkflowUI.pickedStep == null) return;
-        var step = WorkflowUI.pickedStep;
-        if (step.completed) {
-            page.incompleteStep();
+    page.setResolution = function() {
+        if (page.wflow.flow.pickedStep == null) return;
+        var step = page.wflow.flow.pickedStep;
+        var frm = document.forms['frmStep'];
+        var rdo = frm.elements['step_resolution'];
+        var val = rdo.value;
+        if (val == "") {
+            if (page.wflow.canComplete(step, false) != "") return;
+            step.result = null;
+            step.completed = false;
         } else {
-            if (step.resolve_list.length == 0) {
-                page.completeStep();
-            }
+            if (page.wflow.canComplete(step, true) != "") return;
+            step.result = val;
+            step.completed = true;
         }
+        page.wflow.drawCanvas();
+        page.wflow.highlightStep(step, true);
     }
     page.incompleteStep = function() {
-        if (WorkflowUI.pickedStep == null) return;
-        var step = WorkflowUI.pickedStep;
+        if (page.wflow.flow.pickedStep == null) return;
+        var step = page.wflow.flow.pickedStep;
         if (page.wflow.canComplete(step, false) != "") return;
         var frm = B.getForm("frmStep");
         frm.set("step_completed", false);
@@ -201,8 +229,8 @@
         page.saveStepInfo();
     }
     page.completeStep = function(val) {
-        if (WorkflowUI.pickedStep == null) return;
-        var step = WorkflowUI.pickedStep;
+        if (page.wflow.flow.pickedStep == null) return;
+        var step = page.wflow.flow.pickedStep;
         if (page.wflow.canComplete(step, true) != "") return;
         var frm = B.getForm("frmStep");
         if (val == undefined) {
@@ -227,16 +255,16 @@
         }
     }
     page.pickStepId = function(id) {
-        if (WorkflowUI.pickedStep != null) {
-            page.wflow.highlightStep(WorkflowUI.pickedStep, false);
+        if (page.wflow.flow.pickedStep != null) {
+            page.wflow.highlightStep(page.wflow.flow.pickedStep, false);
         }
         var step = page.wflow.getStep(id);
-        WorkflowUI.pickedStep = step;
+        page.wflow.flow.pickedStep = step;
         page.editStep(step);
     }
     page.pickStep = function(x, y) {
-        if (WorkflowUI.pickedStep == null) return;
-        var step = WorkflowUI.pickedStep;
+        if (page.wflow.flow.pickedStep == null) return;
+        var step = page.wflow.flow.pickedStep;
         var newstep = null;
         for (var id in page.wflow.flow.steps) {
             var test = page.wflow.flow.steps[id];
@@ -291,22 +319,12 @@
         }
         if (newstep != null) {
             page.wflow.highlightStep(step, false);
-            WorkflowUI.pickedStep = newstep;
+            page.wflow.flow.pickedStep = newstep;
             page.editStep(newstep);
         }
     }
     page.init = function() {
-        window.onkeydown = function(event) {
-            //console.log(event.keyCode);
-            var block = true;
-            if (event.keyCode == 38) page.pickStep(0, -1); // Up
-            else if (event.keyCode == 40) page.pickStep(0, 1); // Down
-            else if (event.keyCode == 37) page.pickStep(-1, 0); // Left
-            else if (event.keyCode == 39) page.pickStep(1, 0); // Right
-            else block = false;
-            if (block) event.preventDefault();
-        }
-        page.wflow = new Workflow("Test");
+        page.wflow = new Workflow("Test", document.getElementById("locFlowDiagramCanvas"));
 /*        page.wflow.flow = {
             "name":"Test",
             "steps":{
@@ -319,27 +337,66 @@
             }
         } */
 
-        WorkflowUI.defineCanvas(page.wflow, document.getElementById("locFlowDiagramCanvas"));
+        window.addEventListener("keydown", function(event) {
+            //console.log(event.keyCode);
+            var block = false;
+            if (event.ctrlKey) {
+                block = true;
+                if (event.keyCode == 38) page.pickStep(0, -1); // Up
+                else if (event.keyCode == 40) page.pickStep(0, 1); // Down
+                else if (event.keyCode == 37) page.pickStep(-1, 0); // Left
+                else if (event.keyCode == 39) page.pickStep(1, 0); // Right
+                else block = false;
+            }
+            if (block) event.preventDefault();
+        });
+        page.wflow.addEventListener("properties", function(e) {
+            var props = e.detail.properties;
+            var loc = document.getElementById("locProperties");
+            if (props.length == 0) {
+                loc.innerHTML = "No flow properties defined";
+            } else {
+                var h = "<table class='form'>";
+                h += "<tr><th style='text-align:left'>Step </th>";
+                h += "<th style='text-align:left'>Key </th>";
+                h += "<th style='text-align:left'>Value </th></tr>";
+                for (var i = 0; i < props.length; i++) {
+                    var stepProps = props[i];
+                    var step = page.wflow.flow.steps["S" + stepProps.stepid];
+                    for (var j = 0; j < stepProps.props.length; j++) {
+                        var stepProp = stepProps.props[j];
+                        if (j == 0) {
+                            h += "<tr><td><span class='anchor' onclick='page.pickStepId(" + step.id + "); page.editProperties()'>" + step.title + "</span></td>";
+                        } else {
+                            h += "<tr><td>&nbsp;</td>";
+                        }
+                        h += "<td>" + stepProp.key + "</td>";
+                        h += "<td>" + stepProp.value + "</td></tr>";
+                    }
+                }
+                h += "</table>";
+                loc.innerHTML = h;
+            }
+        });
         page.wflow.addEventListener("steppicked", function(e) {
-            document.getElementById("locCreateButton").style.display = "none";
             page.editStep(e.detail.step);
         });
         page.wflow.addEventListener("actioncompleted", function(e) {
             if (e.detail.action == "addBlock") {
-                page.addBlockStep(null, e.detail.step);
+                page.addBlockStep(e.detail.step);
             } else if (e.detail.action == "addBlockedBy") {
-                page.addBlockedByStep(null, e.detail.step);
+                page.addBlockedByStep(e.detail.step);
             }
             page.wflow.highlightStep(e.detail.source, true);
         });
         page.wflow.addEventListener("actionaborted", function(e) {
-            document.getElementById("locCreateButton").style.display = "none";
             page.editStep(true);
         });
         page.wflow.addEventListener("emptyspotpicked", function(e) {
-            document.getElementById("frmStep").style.display = "none";
-            document.getElementById("locCreateButton").style.display = "block";
-            debug();
+            page.editStep(false);
+            var msg = "<button onclick='page.wflow.createStep()'>Create step here...</button> ";
+            msg += "<button onclick='page.clear()'>Cancel</button>"
+            debug(msg);
         });
         page.wflow.addEventListener("stepdeleted", function(e) {
             page.editStep(false);
@@ -350,15 +407,88 @@
             debug();
         });
 
-        //page.wflow.readFlowFromTextFile("./flows/simple.flow");
-        page.readFlowFromTextFile("./flows/initial.flow", true);
+        if (localStorage.getItem("workflow") == null) {
+            page.readFlowFromTextFile("./flows/initial.flow", true);
+        } else {
+            page.replaceFlow(localStorage.getItem("workflow"));
+        }
+    }
+    page.editName = function() {
+        var step = page.wflow.flow.pickedStep;
+        sayGet("Edit the name for this step below", "Step Name", step.title, "Name", function(rslt) {
+            var step = page.wflow.flow.pickedStep;
+            step.title = rslt;
+            document.getElementById("step_title").innerHTML = step.title;
+            page.wflow.drawCanvas();
+            page.wflow.highlightStep(step, true);
+        }, true);
+    }
+    page.editResolutions = function() {
+        openDialog("frmResolutions");
+        var frm = B.getForm("frmResolutions");
+        frm.reset();
+        var step = page.wflow.flow.pickedStep;
+        for (var i = 0; i < step.resolve_list.length; i++) {
+            frm.set("CODE_" + i, step.resolve_list[i].code);
+            frm.set("DESC_" + i, step.resolve_list[i].desc);
+        }
+    }
+    page.editProperties = function() {
+        openDialog("frmProperties");
+        var frm = B.getForm("frmProperties");
+        frm.reset();
+        var step = page.wflow.flow.pickedStep;
+        for (var i = 0; i < step.properties.length; i++) {
+            frm.set("KEY_" + i, step.properties[i].key);
+            frm.set("VAL_" + i, step.properties[i].value);
+        }
+    }
+    page.saveProperties = function() {
+        var chk = B.getForm("frmProperties").get();
+        var step = page.wflow.flow.pickedStep;
+        step.properties = [];
+        for (var i = 0; i < 10; i++) {
+            var key = chk["KEY_" + i];
+            var val = chk["VAL_" + i];
+            if (key != "") {
+                step.properties.push({"key":key,"value":val});
+            }
+        }
+        page.pickStepId(step.id);
+        page.wflow.collectProperties();
+    }
+    page.editLinks = function() {
+        openDialog("frmLinks"); // Data already filled when we started the step edit
+    }
+    page.saveResolutions = function() {
+        var chk = B.getForm("frmResolutions").get();
+        var step = page.wflow.flow.pickedStep;
+        step.resolve_list = [];
+        for (var i = 0; i < 10; i++) {
+            var code = chk["CODE_" + i];
+            var desc = chk["DESC_" + i];
+            if (code != "") {
+                step.resolve_list.push({"code":code,"desc":desc});
+            }
+        }
+        page.pickStepId(step.id);
     }
     page.editComment = function() {
-        var step = WorkflowUI.pickedStep;
-        sayGet("Edit comment for this step below", "Comment", step.comment, "Edit Comment", function(rslt) {
-            var step = WorkflowUI.pickedStep;
+        var step = page.wflow.flow.pickedStep;
+        sayGet("Edit comment for this step below", "Edit Comment", step.comment, "Comment", function(rslt) {
+            var step = page.wflow.flow.pickedStep;
             step.comment = rslt;
             document.getElementById("step_comment").innerHTML = step.comment;
+            page.wflow.highlightStep();
+        }, true);
+    }
+    page.editDescription = function() {
+        var step = page.wflow.flow.pickedStep;
+        sayGet("Edit description for this step below", "EditDescription", step.desc, "Desc", function(rslt) {
+            var step = page.wflow.flow.pickedStep;
+            step.desc = rslt;
+            document.getElementById("step_desc").innerHTML = step.desc;
+            page.wflow.highlightStep();
         }, true);
     }
     page.editStep = function(step) {
@@ -366,20 +496,39 @@
         if (step == undefined) step = false; // Turn it off
         if (typeof step == "boolean") {
             if (step) { // passed "true"... Reload currently picked step
-                step = WorkflowUI.pickedStep;
+                step = page.wflow.flow.pickedStep;
             } else {
                 document.getElementById("frmStep").style.display = "none";
                 return;
             }
         }
-        document.getElementById("locCreateButton").style.display = "none";
         debug("");
         document.getElementById("frmStep").style.display = "block";
         var frm = B.getForm("frmStep");
-        frm.set("step_title", step.title, 
-            "step_completed", step.completed);
+        frm.set("step_completed", step.completed);
+        document.getElementById("step_title").innerHTML = step.title;
         document.getElementById("step_desc").innerHTML = step.desc;
         document.getElementById("step_comment").innerHTML = step.comment;
+        var blked = step.dependsOn.length;
+        var blkby = step.dependedOnBy.length
+        var txt = "Blocking: " + (blkby == 0 ? "None" : blkby);
+        txt += ", Blocked By: " + (blked == 0 ? "None" : blked);
+        document.getElementById("step_link_summary").innerHTML = txt;
+
+        var loc = document.getElementById("step_properties");
+        if (step.properties.length == 0) {
+            loc.innerHTML = "&lt;No Properties&gt;";
+        } else {
+            var tbl = "";
+            for (var i = 0; i < step.properties.length; i++) {
+                var prop = step.properties[i];
+                tbl += "<tr><td style='color:navy'>" + prop.key + "</td>";
+                tbl += "<td>" + (prop.value == "" ? "&lt;not entered&gt;" : prop.value) + "</td></tr>";
+            }
+            loc.innerHTML = "<table>" + tbl + "</table>";
+        }
+
+
         var loc = document.getElementById("step_dependson");
         loc.innerHTML = "";
         if (step.dependsOn.length == 0) {
@@ -392,10 +541,10 @@
                 var depStep = page.wflow.getStep(depid);
                 var li = document.createElement("li");
                 li.innerHTML = "";
-                var txt = depStep.completed ? "&#x2713; " : "&nbsp;&nbsp; ";
+                var txt = "<span class='anchor' style='color:red' onclick='page.wflow.removeLink(" + depStep.id + ")'>[&#xD7;]</span>";
+                txt += "&nbsp;";
+                txt += depStep.completed ? "&#x2713; " : "&nbsp;&nbsp; ";
                 txt += "<span class='anchor' onclick='page.pickStepId(" + depStep.id + ")'>" + depStep.title + "</span>";
-                txt += "&nbsp;&nbsp;";
-                txt += "<span class='anchor' style='color:red' onclick='page.removeBlockedBy(this, " + depStep.id + ")'>[&#xD7;]</span>";
                 li.innerHTML = txt;
                 li.style.color = depStep.completed ? "green" : "red";
                 ul.appendChild(li);
@@ -414,48 +563,42 @@
                 var depStep = page.wflow.getStep(depid);
                 var li = document.createElement("li");
                 li.innerHTML = "";
-                var txt = depStep.completed ? "&#x2713; " : "&nbsp;&nbsp; ";
+                var txt = "<span class='anchor' style='color:red' onclick='page.wflow.removeLink(" + depStep.id + ")'>[&#xD7;]</span>";
+                txt += "&nbsp;";
+                txt += depStep.completed ? "&#x2713; " : "&nbsp;&nbsp; ";
                 txt += "<span class='anchor' onclick='page.pickStepId(" + depStep.id + ")'>" + depStep.title + "</span>";
-                txt += "&nbsp;&nbsp;";
-                txt += "<span class='anchor' style='color:red' onclick='page.removeBlock(this, " + depStep.id + ")'>[&#xD7;]</span>";
                 li.innerHTML = txt;
                 ul.appendChild(li);
             }
             loc.appendChild(ul);
         }
-        document.getElementById("locResolveCheckbox").style.display = "none";
-        document.getElementById("locResolveList").style.display = "none";
-        var chksel = null;
-        if (step.resolve_list.length == 0) { // Simple Yes/No resolution
-            document.getElementById("locResolveCheckbox").style.display = "table-row";
-            chksel = frm.getElement("step_completed").domElements;
-        } else { // List of possible resolution values
-            document.getElementById("locResolveList").style.display = "table-row";
-            chksel = frm.getElement("step_resolution").domElements;
-            chksel.options.length = 1; // Leave the first "select one when completed" item
-            for (var i = 0; i < step.resolve_list.length; i++) {
-                var itm = step.resolve_list[i];
-                var opt = document.createElement("option");
-                opt.value = itm.code;
-                opt.innerHTML = itm.desc;
-                if (itm.code == step.result) opt.selected = true;
-                chksel.appendChild(opt);
-            }
-
-        }
-        chksel.removeAttribute("disabled");
+        var dis = ""; // Not disabled
         if (step.completed) {
             var msg = page.wflow.canComplete(step, false);
             if (msg != "") {
-                //document.getElementById("locCannotComplete").innerHTML = msg;
-                chksel.setAttribute("disabled", "disabled");
+                dis = " disabled";
             }
         } else {
             var msg = page.wflow.canComplete(step, true);
             if (msg != "") {
-                //document.getElementById("locCannotComplete").innerHTML = msg;
-                chksel.setAttribute("disabled", "disabled");
+                dis = " disabled";
             }
+        }
+
+        var td = document.getElementById("locResolveList");
+        var oc = " onchange='page.setResolution()'";
+        var picked = step.completed ? "" : " checked";
+        td.innerHTML = "<label><input" + oc + dis + picked + " type='radio' name='step_resolution' value='' selected> Not Completed</label><br>";
+        if (step.resolve_list.length == 0) { // Simple Yes/No resolution
+            var picked = step.completed ? " checked" : "";
+            td.innerHTML += "<label><input" + oc + dis + picked + " type='radio' name='step_resolution' value='YES'> Completed</label><br>";
+        } else { // List of possible resolution values
+            for (var i = 0; i < step.resolve_list.length; i++) {
+                var itm = step.resolve_list[i];
+                var picked = step.result == itm.code ? " checked" : "";
+                td.innerHTML += "<label><input" + oc + dis + picked + " type='radio' name='step_resolution' value='" + itm.code + "'> " + itm.desc + "</label><br>";
+            }
+
         }
         page.wflow.highlightStep(step, true);
     }
@@ -497,42 +640,31 @@ page.copyToClipboard = function(txt) {
 </script>
 </head>
 <body onload='page.init()'>
-    <table style='width:100%'>
+    <table style='width:1200px'>
         <tr>
-            <td style='vertical-align: top; width:650px;'>
-                <div style='position:relative; width:610px; height: 400px; overflow:scroll;'>
+            <td style='vertical-align: top; width:830px;'>
+                <button onclick='page.getFlow()'>Load Flow</button>
+                <button onclick='page.saveFlow()'>Save Flow to file</button>
+                [<span class='anchor' style='font-size:.8em;' onclick='page.saveLocal()'>Save in browser data</span>]
+                <span id='locToastMessage' style='color:brown; font-size:.8em;'></span>
+                <div style='position:relative; width:820px; height: 450px; overflow:scroll; margin-bottom:.5em; margin-top:.5em;'>
                     <div id='locFlowDiagramCanvas'></div>
                 </div>
-                <button onclick='page.getFlow()'>Load Flow</button>
-                <button onclick='page.saveFlow()'>Save Flow</button>
-                <div style='padding-top: .5em;margin-top:.5em; border-top: 1px solid navy;' id='locDebug' style='color:brown'></div>
+                <div style='margin-top:.5em;' id='locDebug' style='color:brown'></div>
             
             </td>
-            <td id='locForm' style='vertical-align: top; text-align: left; width:calc(100vw - 650px)'>
-                <span style='display:none' id='locCreateButton'><button onclick='page.wflow.createStep()'>Create Step Here</button></span>
-                <form id='frmStep' style='display:none'>
+            <td id='locForm' style='vertical-align: top; text-align: left; width:500px'>
+                <div style='padding-bottom:.5em; margin-bottom:.5em; border-bottom: 1px solid navy;' id='locProperties'></div>
+                <form id='frmStep' style='display:none; width:100%'>
                     <button onclick='page.askToDeleteStep()'>Delete This Step</button>
                     <table class='form'>
-                        <tr><th>Title:</th><td><input readonly name='step_title' size='30'></td></tr>
-                        <tr><th>Description:</th><td id='step_desc'></textarea></td></tr>
+                        <tr><th><span class='anchor' onclick='page.editName();'>Title</span>:</th><td id='step_title'></td></tr>
+                        <tr><th><span class='anchor' onclick='page.editDescription();'>Description</span>:</th><td id='step_desc'></textarea></td></tr>
                         <tr><th><span class='anchor' onclick='page.editComment();'>Comment</span>:</th><td id='step_comment'></td></tr>
-                        <tr><td colspan='2'>
-                            <table style='width:100%'>
-                                <tr>
-                                    <td style='width:50%'>
-                                        Blocked by [<span class='anchor' onclick='page.addBlockStep(this)'>add</span>]<br>
-                                        <span id='step_dependson'></span>
-                                    </td>
-                                    <td style='width:50%'>
-                                        Blocks [<span class='anchor' onclick='page.addBlockedByStep(this)'>add</span>]<br>
-                                        <span id='step_dependedonby'></span>
-                                    </td>
-                                </tr></table>
-                            </td>
-                        </tr>
-            
-                        <tr style='display:none' id='locResolveCheckbox'><th>Completed:</th><td><label><input type='checkbox' onchange='page.saveStepInfo()' name='step_completed'> <i style='color:coral;'>Check when completed</i></label></td></tr>
-                        <tr style='display:none' id='locResolveList'><th>Resolution:</th><td><select style='width:15em' onchange='page.saveStepInfo()' name='step_resolution'><option value=''>Not completed</option></select></td></tr>
+                        <tr><td colspan='2'><hr/></td></tr>
+                        <tr><th><span class='anchor' onclick='page.editLinks();'>Links</span>:</th><td id='step_link_summary'></td></tr>
+                        <tr><th><span class='anchor' onclick='page.editProperties();'>Properties</span>:</th><td id='step_properties'></td></tr>
+                        <tr><th><span class='anchor' onclick='page.editResolutions();'>Resolution</span>:</th><td id='locResolveList'></td></tr>
                         <tr><td>&nbsp;</td><td id='locCannotComplete' style='font-size:.9em; color:red;'></td></tr>
                     </table>
                     </div>
@@ -542,4 +674,61 @@ page.copyToClipboard = function(txt) {
         </tr>
     </table>
 </body>
+<form id='frmLinks' class='BDialog' style='height:400px; width:400px;' title='Step Links'>
+    <table style='width:100%'>
+        <tr>
+            <td style='width:50%; vertical-align:top'>
+                Blocked by: [<span class='anchor' onclick='popDialog();page.addBlockedByStep()'>Add</span>]<br>
+                <span id='step_dependson'></span>
+            </td>
+            <td style='width:50%; vertical-align:top'>
+                Blocks: [<span class='anchor' onclick='popDialog();page.addBlockStep()'>Add</span>]<br>
+                <span id='step_dependedonby'></span>
+            </td>
+        </tr>
+    </table>
+    <button class="BDialogButton" onclick='popDialog()'>Close</button>
+</form>
+<form id='frmResolutions' class='BDialog' style='height:450px; width:500px;' title='Resolution Items'>
+    <table class='form' style='width:99%'>
+        <tr>
+            <td style='font-weight:bold; text-align:center;'>Code</td>
+            <td style='font-weight:bold; text-align:center;'>Description</td>
+        </tr>
+        <tr><td><input name='CODE_0' size='4'></td><td><input name='DESC_0' size='40'></td></tr>
+        <tr><td><input name='CODE_1' size='4'></td><td><input name='DESC_1' size='40'></td></tr>
+        <tr><td><input name='CODE_2' size='4'></td><td><input name='DESC_2' size='40'></td></tr>
+        <tr><td><input name='CODE_3' size='4'></td><td><input name='DESC_3' size='40'></td></tr>
+        <tr><td><input name='CODE_4' size='4'></td><td><input name='DESC_4' size='40'></td></tr>
+        <tr><td><input name='CODE_5' size='4'></td><td><input name='DESC_5' size='40'></td></tr>
+        <tr><td><input name='CODE_6' size='4'></td><td><input name='DESC_6' size='40'></td></tr>
+        <tr><td><input name='CODE_7' size='4'></td><td><input name='DESC_7' size='40'></td></tr>
+        <tr><td><input name='CODE_8' size='4'></td><td><input name='DESC_8' size='40'></td></tr>
+        <tr><td><input name='CODE_9' size='4'></td><td><input name='DESC_9' size='40'></td></tr>
+    </table>
+
+    <button class="BDialogButton" onclick='page.saveResolutions(); popDialog();'>Save</button>
+    <button class="BDialogButton" onclick='popDialog()'>Close</button>
+</form>
+<form id='frmProperties' class='BDialog' style='height:450px; width:500px;' title='Properties'>
+    <table class='form' style='width:99%'>
+        <tr>
+            <td style='font-weight:bold; text-align:center;'>Key</td>
+            <td style='font-weight:bold; text-align:center;'>Value</td>
+        </tr>
+        <tr><td><input name='KEY_0' size='10'></td><td><input name='VAL_0' size='30'></td></tr>
+        <tr><td><input name='KEY_1' size='10'></td><td><input name='VAL_1' size='30'></td></tr>
+        <tr><td><input name='KEY_2' size='10'></td><td><input name='VAL_2' size='30'></td></tr>
+        <tr><td><input name='KEY_3' size='10'></td><td><input name='VAL_3' size='30'></td></tr>
+        <tr><td><input name='KEY_4' size='10'></td><td><input name='VAL_4' size='30'></td></tr>
+        <tr><td><input name='KEY_5' size='10'></td><td><input name='VAL_5' size='30'></td></tr>
+        <tr><td><input name='KEY_6' size='10'></td><td><input name='VAL_6' size='30'></td></tr>
+        <tr><td><input name='KEY_7' size='10'></td><td><input name='VAL_7' size='30'></td></tr>
+        <tr><td><input name='KEY_8' size='10'></td><td><input name='VAL_8' size='30'></td></tr>
+        <tr><td><input name='KEY_9' size='10'></td><td><input name='VAL_9' size='30'></td></tr>
+    </table>
+
+    <button class="BDialogButton" onclick='page.saveProperties(); popDialog();'>Save</button>
+    <button class="BDialogButton" onclick='popDialog()'>Close</button>
+</form>
 </html>
