@@ -78,6 +78,8 @@ WorkflowUI.defineCanvas = function(workflow, div) {
             if (event.button == 0) {
                 WorkflowUI.markPickedSpot();
                 WorkflowUI.masterFlow.dispatchEvent("emptyspotpicked", {spot:WorkflowUI.pickedSpot});
+            } else {
+                WorkflowUI.masterFlow.dispatchEvent("clear", {});
             }
         }
 
@@ -184,40 +186,15 @@ WorkflowUI.markPickedSpot = function() {
     ctx.strokeStyle = "red";
     ctx.stroke();
 }
-WorkflowUI.drawStep = function(can, step, highlight) {
-    if (highlight == undefined) highlight = false;
-    var ctx = this.ctx; //can.getContext("2d");
+WorkflowUI.drawStepShape = function(step, x, y) {
+    var ctx = this.ctx;
     var wf = WorkflowUI.masterFlow;
     var w = WorkflowUI.stepImageWidth;
-    var gut = WorkflowUI.stepImageColumnGutter;
-    var stepSize = w/3;
-    var xy = WorkflowUI.getXY(step);
-    var x = xy.x;
-    var y = xy.y;
-    ctx.clearRect(xy.x - 10,xy.y - 10, xy.w + 20, xy.h + 20);
-    ctx.save();
-    ctx.beginPath();
-    if (highlight) {
-        ctx.shadowBlur = 12;
-        ctx.shadowColor = "yellow";    
-    }
-    ctx.moveTo(x, y+w); // Start at lower left
-    ctx.lineTo(x+w, y+w); // Bottom
-    ctx.lineTo(x+w, y); // Right edge
-    ctx.lineTo(x+stepSize+stepSize, y); // Top step
-    ctx.lineTo(x+stepSize+stepSize, y+stepSize); // Left on top step
-    ctx.lineTo(x+stepSize, y+stepSize); // Top of 2nd step
-    ctx.lineTo(x+stepSize, y+stepSize+stepSize); // Left of 2nd step
-    ctx.lineTo(x, y+stepSize+stepSize); // Top of 1st step
-    ctx.closePath();
-    ctx.lineWidth = 3;
-    ctx.strokeStyle = "#000000"; // black border
-    ctx.stroke();
     var blockColor = null;
+    var fillStyle = null;
     if (step.completed) {
-        ctx.fillStyle = "#90EE90";
-        var msg = wf.canComplete(step, false);
-        if (msg != "") {
+        fillStyle = "#90EE90";
+        if (wf.canComplete(step, false) != "") {
             blockColor = "#008B8B";
         }
     } else {
@@ -229,25 +206,113 @@ WorkflowUI.drawStep = function(can, step, highlight) {
             }
         }
         if (blockColor != null) {
-            ctx.fillStyle = "#A9A9A9";
+            fillStyle = "#A9A9A9";
         } else {
-            ctx.fillStyle = "#F8F8FF";
+            fillStyle = "#F8F8FF";
         }
-        ctx.fillStyle = "#F8F8FF";
+        fillStyle = "#F8F8FF";
     }
-    ctx.fill();
+    if (step.shape == "step") {
+        if (fillStyle != null) ctx.fillStyle = fillStyle;
+        var h = w;
+        h -= 6; // Adjust to leave room above / below
+        y += 3;
+        var stepSize = h/3;
+        ctx.moveTo(x, y+h); // Start at lower left
+        ctx.lineTo(x+w-3, y+h); // Bottom ... radius
+        ctx.arcTo(x+w,y+h, x+w,y+h-3, 3) // Radius on bottom right
+        ctx.lineTo(x+w, y); // Right edge
+        ctx.lineTo(x+stepSize+stepSize, y); // Top step
+        ctx.lineTo(x+stepSize+stepSize, y+stepSize); // Left on top step
+        ctx.lineTo(x+stepSize, y+stepSize); // Top of 2nd step
+        ctx.lineTo(x+stepSize, y+stepSize+stepSize); // Left of 2nd step
+        ctx.lineTo(x, y+stepSize+stepSize); // Top of 1st step
+        ctx.closePath();
+        ctx.lineWidth = 3;
+        ctx.strokeStyle = "#000000"; // black border
+        ctx.stroke();
+        ctx.fill();
+        if (blockColor != null) {
+            ctx.beginPath();
+            ctx.arc(x + w - (w/3), y + h - (h/3), w/6, 0, 2 * Math.PI);
+            ctx.fillStyle = blockColor;
+            ctx.fill();        
+            ctx.restore();
+        }
+    } else if (step.shape == "box") {
+        if (fillStyle != null) ctx.fillStyle = fillStyle;
+        var stepSize = w/2;
+        WorkflowUI.roundedRectangle(x, y+3, w-6, w, 3);
+        ctx.lineWidth = 3;
+        ctx.strokeStyle = "#000000"; // black border
+        ctx.stroke();
+        ctx.fill();
+        if (blockColor != null) {
+            ctx.beginPath();
+            ctx.arc(x + (w/2), y + (w/2), w/6, 0, 2 * Math.PI);
+            ctx.fillStyle = blockColor;
+            ctx.fill();        
+            ctx.restore();
+        }
+    } else if (step.shape == "diamond") {
+        if (fillStyle != null) ctx.fillStyle = fillStyle;
+        ctx.moveTo(x, y+(w/2)); // Left
+        ctx.lineTo(x+(w/2), y+w-3); // Bottom
+        ctx.lineTo(x+w, y+(w/2)); // Right
+        ctx.lineTo(x+(w/2), y+3); // Top
+        ctx.closePath();
+        ctx.lineWidth = 3;
+        ctx.strokeStyle = "#000000"; // black border
+        ctx.stroke();
+        ctx.fill();
+        if (blockColor != null) {
+            ctx.beginPath();
+            ctx.arc(x + (w/2), y + (w/2), w/6, 0, 2 * Math.PI);
+            ctx.fillStyle = blockColor;
+            ctx.fill();        
+            ctx.restore();
+        }
+    } else if (step.shape == "circle") {
+        if (fillStyle != null) ctx.fillStyle = fillStyle;
+        var stepSize = w/2;
+        ctx.arc(x + (w/2), y + (w/2), (w/2)-2, 0, 2 * Math.PI);
+        ctx.lineWidth = 3;
+        ctx.strokeStyle = "#000000"; // black border
+        ctx.stroke();
+        ctx.fill();
+        if (blockColor != null) {
+            ctx.beginPath();
+            ctx.arc(x + (w/2), y + (w/2), w/6, 0, 2 * Math.PI);
+            ctx.fillStyle = blockColor;
+            ctx.fill();        
+            ctx.restore();
+        }
+    }
+}
+WorkflowUI.drawStep = function(can, step, highlight) {
+    if (highlight == undefined) highlight = false;
+    var ctx = this.ctx; //can.getContext("2d");
+    var w = WorkflowUI.stepImageWidth;
+    var xy = WorkflowUI.getXY(step);
+    var x = xy.x;
+    var y = xy.y;
+    ctx.clearRect(xy.x - 10,xy.y - 10, xy.w + 20, xy.h + 20);
+    ctx.save();
+    ctx.beginPath();
+    if (highlight) {
+        ctx.shadowBlur = 12;
+        ctx.shadowColor = "yellow";    
+    }
+    if (step.shape == undefined) step.shape = "step";
+    WorkflowUI.drawStepShape(step, x, y);
     ctx.restore();
+
     ctx.font = "8pt Arial";
-    ctx.fillStyle = "#000000"; // Back to black
-    ctx.fillText(step.title, x, y+w+12);
+    ctx.fillStyle = "#191970"; // Back to black
+    var txtSize = ctx.measureText(step.title);
+    var txtLeft = x + (w/2) - (txtSize.width / 2);
+    ctx.fillText(step.title, txtLeft, y+w+12);
     ctx.restore();
-    if (blockColor != null) {
-        ctx.beginPath();
-        ctx.arc(x + w - (w/3), y + w - (w/3), w/6, 0, 2 * Math.PI);
-        ctx.fillStyle = blockColor;
-        ctx.fill();        
-        ctx.restore();
-    }
 //    ctx.font = "8pt Arial";
 //    ctx.fillStyle = "#000000";
 //     var chrCheck = String.fromCharCode(10004);
@@ -382,3 +447,17 @@ WorkflowUI.lineLength = function(x1, y1, x2, y2) {
     return c;
 }
 
+WorkflowUI.roundedRectangle = function(x, y, h, w, r) {
+    var ctx = this.ctx;
+    ctx.beginPath();
+    ctx.moveTo(x + r, y);
+    ctx.lineTo(x + w - r, y); // top
+    ctx.arcTo(x + w, y, x + w, y + r, r);
+    ctx.lineTo(x + w, y + h - r - r); // right
+    ctx.arcTo(x + w, y + h, x + w - r, y + h, r);
+    ctx.lineTo(x + r, y + h); // bottom
+    ctx.arcTo(x, y + h, x, y + h - r, r);
+    ctx.lineTo(x, y + r); // left
+    ctx.arcTo(x, y, x + r, y, r);
+    ctx.closePath();
+}
