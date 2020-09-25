@@ -206,7 +206,7 @@ Workflow.prototype.createStep = function(row, col) {
     var obj = {
         id: nextNum,
         title: 'New Step',
-        desc: '',
+        desc: '', shape: 'step',
         location: {col:col, row:row},
         result:null, completed:false, dependsOn:[], dependedOnBy:[],
         properties: [], // Collection of {key:'XX',value:''} pairs
