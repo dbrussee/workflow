@@ -32,6 +32,12 @@
             }, 4000);
         }
     }
+    page.changeShape = function() {
+        var chk = B.getForm("frmStep").get();
+        page.wflow.flow.pickedStep.shape = chk.step_shape;
+        page.wflow.drawCanvas();
+        page.wflow.highlightStep(page.wflow.flow.pickedStep, true);
+    }
     page.getFlow = function() {
         //page.editStep(false);
         var div = document.getElementById("locDebug");
@@ -122,6 +128,7 @@
         if (page.wflow.flow.pickedStep != null) {
             page.pickStepId(page.wflow.flow.pickedStep.id);
         }
+        page.saveLocal();
     }
     page.saveStepInfo = function() {
         var frm = B.getForm("frmStep");
@@ -399,12 +406,16 @@
             debug(msg);
         });
         page.wflow.addEventListener("stepdeleted", function(e) {
+            page.wflow.collectProperties();
             page.editStep(false);
             debug();
         });
         page.wflow.addEventListener("linkremoved", function(e) {
             page.editStep(true);
             debug();
+        });
+        page.wflow.addEventListener("clear", function(e) {
+            page.clear();
         });
 
         if (localStorage.getItem("workflow") == null) {
@@ -415,13 +426,13 @@
     }
     page.editName = function() {
         var step = page.wflow.flow.pickedStep;
-        sayGet("Edit the name for this step below", "Step Name", step.title, "Name", function(rslt) {
+        sayGet("Edit the name for this step below", "Name", step.title, "Step Name", function(rslt) {
             var step = page.wflow.flow.pickedStep;
             step.title = rslt;
             document.getElementById("step_title").innerHTML = step.title;
             page.wflow.drawCanvas();
             page.wflow.highlightStep(step, true);
-        }, true);
+        });
     }
     page.editResolutions = function() {
         openDialog("frmResolutions");
@@ -505,10 +516,13 @@
         debug("");
         document.getElementById("frmStep").style.display = "block";
         var frm = B.getForm("frmStep");
+        frm.reset();
         frm.set("step_completed", step.completed);
         document.getElementById("step_title").innerHTML = step.title;
         document.getElementById("step_desc").innerHTML = step.desc;
         document.getElementById("step_comment").innerHTML = step.comment;
+        if (step.shape == undefined) step.shape = "step";
+        frm.set("step_shape", step.shape);
         var blked = step.dependsOn.length;
         var blkby = step.dependedOnBy.length
         var txt = "Blocking: " + (blkby == 0 ? "None" : blkby);
@@ -640,7 +654,7 @@ page.copyToClipboard = function(txt) {
 </script>
 </head>
 <body onload='page.init()'>
-    <table style='width:1200px'>
+    <table>
         <tr>
             <td style='vertical-align: top; width:830px;'>
                 <button onclick='page.getFlow()'>Load Flow</button>
@@ -653,7 +667,7 @@ page.copyToClipboard = function(txt) {
                 <div style='margin-top:.5em;' id='locDebug' style='color:brown'></div>
             
             </td>
-            <td id='locForm' style='vertical-align: top; text-align: left; width:500px'>
+            <td id='locForm' style='vertical-align: top; text-align: left; width:500px;'>
                 <div style='padding-bottom:.5em; margin-bottom:.5em; border-bottom: 1px solid navy;' id='locProperties'></div>
                 <form id='frmStep' style='display:none; width:100%'>
                     <button onclick='page.askToDeleteStep()'>Delete This Step</button>
@@ -661,11 +675,16 @@ page.copyToClipboard = function(txt) {
                         <tr><th><span class='anchor' onclick='page.editName();'>Title</span>:</th><td id='step_title'></td></tr>
                         <tr><th><span class='anchor' onclick='page.editDescription();'>Description</span>:</th><td id='step_desc'></textarea></td></tr>
                         <tr><th><span class='anchor' onclick='page.editComment();'>Comment</span>:</th><td id='step_comment'></td></tr>
+                        <tr><th>Step shape:</th><td>
+                                <label><input type='radio' onchange='page.changeShape()' name='step_shape' value='step' checked> Step</label>&nbsp;&nbsp;
+                                <label><input type='radio' onchange='page.changeShape()' name='step_shape' value='box'> Box</label>&nbsp;&nbsp;
+                                <label><input type='radio' onchange='page.changeShape()' name='step_shape' value='diamond'> Diamond</label>&nbsp;&nbsp;
+                                <label><input type='radio' onchange='page.changeShape()' name='step_shape' value='circle'> Circle</label>
+                            </td></tr>
                         <tr><td colspan='2'><hr/></td></tr>
                         <tr><th><span class='anchor' onclick='page.editLinks();'>Links</span>:</th><td id='step_link_summary'></td></tr>
                         <tr><th><span class='anchor' onclick='page.editProperties();'>Properties</span>:</th><td id='step_properties'></td></tr>
                         <tr><th><span class='anchor' onclick='page.editResolutions();'>Resolution</span>:</th><td id='locResolveList'></td></tr>
-                        <tr><td>&nbsp;</td><td id='locCannotComplete' style='font-size:.9em; color:red;'></td></tr>
                     </table>
                     </div>
                 </form>
